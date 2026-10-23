@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ODP · AI 平台 Web 调度中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #05070f;
+            background-image:
+                radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.18), transparent 45%),
+                radial-gradient(circle at 85% 10%, rgba(129, 140, 248, 0.18), transparent 40%),
+                linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+            background-size: auto, auto, 40px 40px, 40px 40px;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-200 font-sans">
+
+    <!-- 顶部标题 -->
+    <header class="border-b border-slate-800/80 backdrop-blur">
+        <div class="max-w-6xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold tracking-wider bg-gradient-to-r from-cyan-300 via-sky-400 to-indigo-400 bg-clip-text text-transparent">
+                    AI 平台 Web 调度中心
+                </h1>
+                <p class="mt-1 text-xs md:text-sm text-slate-500 tracking-widest uppercase">ODP · Orchestration Console</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-emerald-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                SYSTEM ONLINE
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-10 grid gap-8 lg:grid-cols-2">
+
+        <!-- 上传表单 -->
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6 shadow-[0_0_40px_-15px_rgba(56,189,248,0.6)]">
+            <h2 class="text-lg font-semibold text-cyan-300 mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-5 bg-cyan-400 rounded-full"></span>图像推理任务
+            </h2>
+
+            <form id="infer-form" method="post" action="{% url 'api_infer' %}" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                <label for="image" class="block text-sm text-slate-400">选择待检测图片</label>
+                <input id="image" name="image" type="file" accept="image/*" required
+                       class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 border border-slate-700 rounded-lg bg-slate-950/60 px-3 py-2">
+
+                <button id="run-btn" type="submit"
+                        class="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-500 px-4 py-3 font-semibold text-slate-950 tracking-wide hover:from-cyan-400 hover:to-indigo-400 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    开始推理
+                </button>
+            </form>
+
+            <div class="mt-6 text-xs text-slate-500 space-y-1">
+                <p>状态：<span id="status" class="text-slate-300">等待任务提交…</span></p>
+                <p>检测类别：<span id="classes" class="text-cyan-300">—</span></p>
+            </div>
+        </section>
+
+        <!-- 结果预览 + 智能解释 -->
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6">
+            <h2 class="text-lg font-semibold text-indigo-300 mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-5 bg-indigo-400 rounded-full"></span>推理结果
+            </h2>
+
+            <div class="rounded-xl border border-slate-800 bg-slate-950/70 flex items-center justify-center min-h-[240px] overflow-hidden">
+                <img id="preview" src="" alt="结果预览"
+                     class="hidden max-h-[320px] w-auto object-contain">
+                <span id="preview-tip" class="text-slate-600 text-sm">暂无预览图</span>
+            </div>
+
+            <h3 class="mt-6 text-sm font-semibold text-slate-300">智能解释</h3>
+            <div id="explanation"
+                 class="mt-2 rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-relaxed text-slate-400 min-h-[96px]">
+                等待模型返回解释…
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById("infer-form");
+        const runBtn = document.getElementById("run-btn");
+        const statusEl = document.getElementById("status");
+        const classesEl = document.getElementById("classes");
+        const previewEl = document.getElementById("preview");
+        const previewTip = document.getElementById("preview-tip");
+        const explanationEl = document.getElementById("explanation");
+        const csrfToken = form.querySelector("input[name='csrfmiddlewaretoken']").value;
+
+        // 选择文件后本地预览
+        form.image.addEventListener("change", () => {
+            const file = form.image.files[0];
+            if (!file) return;
+            previewEl.src = URL.createObjectURL(file);
+            previewEl.classList.remove("hidden");
+            previewTip.classList.add("hidden");
+        });
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            runBtn.disabled = true;
+            runBtn.textContent = "推理中…";
+            statusEl.textContent = "正在提交图像…";
+            explanationEl.textContent = "等待模型返回解释…";
+
+            try {
+                // 1. 上传图片，调用推理接口
+                const formData = new FormData(form);
+                const inferResp = await fetch("{% url 'api_infer' %}", {
+                    method: "POST",
+                    headers: { "X-CSRFToken": csrfToken },
+                    body: formData,
+                });
+                const inferData = await inferResp.json();
+
+                if (inferData.status !== "success") {
+                    throw new Error(inferData.message || "推理失败");
+                }
+
+                // 2. 更新结果图与类别
+                previewEl.src = inferData.result_img_url;
+                previewEl.classList.remove("hidden");
+                previewTip.classList.add("hidden");
+                classesEl.textContent = inferData.classes || "—";
+                statusEl.textContent = "推理完成，正在生成解释…";
+
+                // 3. 调用解释接口
+                const explainResp = await fetch("{% url 'api_explain' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfToken,
+                    },
+                    body: JSON.stringify({ classes: inferData.classes }),
+                });
+                const explainData = await explainResp.json();
+                explanationEl.textContent = explainData.explanation || "暂无解释";
+                statusEl.textContent = "任务完成";
+            } catch (error) {
+                statusEl.textContent = "任务失败：" + error.message;
+                explanationEl.textContent = "请检查服务端日志后重试。";
+            } finally {
+                runBtn.disabled = false;
+                runBtn.textContent = "开始推理";
+            }
+        });
+    </script>
+</body>
+</html>
