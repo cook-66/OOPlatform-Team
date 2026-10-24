@@ -6,6 +6,7 @@ odp_meta 是"产品合格证":记录这份成品由谁、用什么配方产出,�
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import yaml
@@ -24,8 +25,9 @@ def write_dataset_yaml(
     task: str,
     manifest_ref: str,
 ) -> None:
+    portable_root = Path(os.path.relpath(dataset_root, yaml_path.parent)).as_posix()
     doc = {
-        "path": dataset_root.as_posix(),
+        "path": portable_root,
         "train": "images/train",
         "val": "images/val",
         "test": "images/test",

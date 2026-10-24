@@ -19,8 +19,8 @@ from od_platform.common.constants import (
     DEFAULT_SPLIT_STRATEGY,
     DEFAULT_TRAIN_RATE,
     DEFAULT_VAL_RATE,
-    IMAGE_EXTENSIONS,
     AnnotationFormat,
+    SplitStrategy,
     Task,
 )
 from od_platform.common.lineage import (
@@ -34,6 +34,7 @@ from od_platform.data_pipeline.report import (
     format_report,
     warn_if_rare,
 )
+from od_platform.data_pipeline.source_layout import SourceLayout, discover_source_layout
 from od_platform.data_pipeline.split.materializer import (
     SplitOutputDirs,
     SplitSourceDirs,
@@ -73,38 +74,30 @@ class DatasetPipeline:
         self.split_strategy = split_strategy
         self._run_ctx = run        # 存成私有名:实例属性不能遮蔽 run() 方法
         self.raw_root = paths.raw_dataset_root(dataset)
-        self.raw_images = self.raw_root / "images"
-        self.raw_annotations = self.raw_root / "annotations"
-
-    def _annotation_dir(self) -> Path:
-        """源标注目录:YOLO 格式的标注在 labels/,其余在 annotations/。"""
-        if self.annotation_format == AnnotationFormat.YOLO:
-            return self.raw_root / "labels"
-        return self.raw_annotations
+        self._layout: SourceLayout | None = None
 
     # ---- 前置检查 ----
 
     def _check_raw(self) -> None:
         if not self.raw_root.exists():
             raise FileNotFoundError(f"数据集不存在: {self.raw_root}")
-        if not self.raw_images.exists():
-            raise FileNotFoundError(f"缺少图像目录: {self.raw_images}")
-        ann_dir = self._annotation_dir()
-        if not ann_dir.exists():
-            raise FileNotFoundError(f"缺少标注目录: {ann_dir}")
+        self._layout = discover_source_layout(self.raw_root, self.annotation_format)
+        if self.split_strategy == SplitStrategy.PRESERVE_SOURCE and \
+                self._layout.source_split_per_image is None:
+            raise ValueError("preserve_source 需要源数据包含 train/val/test 预划分目录")
         self._check_coverage()
 
     def _check_coverage(self) -> None:
         """覆盖率闸门:标注数/图像数 过低时直接拒跑。"""
-        n_images = sum(1 for p in self.raw_images.rglob("*")
-                       if p.suffix.lower() in IMAGE_EXTENSIONS)
+        assert self._layout is not None
+        n_images = len(self._layout.image_index)
         if n_images == 0:
-            raise FileNotFoundError(f"图像目录为空: {self.raw_images}")
+            raise FileNotFoundError(f"图像目录为空: {self._layout.root}")
         if self.annotation_format == AnnotationFormat.COCO:
             logger.debug("COCO 为单 json 格式,跳过 stem 级覆盖率检查")
             return
-        ann_dir = self._annotation_dir()
-        n_annos = len(list(ann_dir.glob("*.*"))) if ann_dir.exists() else 0
+        n_annos = sum(1 if source.is_file() else len(list(source.glob("*.*")))
+                      for _split, source in self._layout.annotation_dirs)
         coverage = n_annos / n_images
         if coverage < COVERAGE_HARD_THRESHOLD:
             raise ValueError(
@@ -119,10 +112,8 @@ class DatasetPipeline:
     # ---- 扫描:转换产物 → 内存结构 ----
 
     def _scan(self, staging: Path, classes: list[str]):
-        image_index: dict[str, Path] = {}
-        for p in sorted(self.raw_images.rglob("*")):
-            if p.suffix.lower() in IMAGE_EXTENSIONS:
-                image_index[p.stem] = p
+        assert self._layout is not None
+        image_index = self._layout.image_index
         labels_per_image: dict[str, list[str]] = defaultdict(list)
         label_bytes: dict[str, bytes] = {}
         for txt in sorted(staging.glob("*.txt")):
@@ -148,11 +139,30 @@ class DatasetPipeline:
 
         with tempfile.TemporaryDirectory(prefix="odp_pipe_") as staging_dir:
             staging = Path(staging_dir)
-            ann_in = self._annotation_dir()
-            options = ConvertOptions(task=self.task, classes=self.classes)
-            classes = convert_data_to_yolo(ann_in, staging, self.annotation_format, options)
+            assert self._layout is not None
+            requested_classes = self.classes or self._layout.classes_hint
+            classes: list[str] | None = None
+            for _source_split, ann_in in self._layout.annotation_dirs:
+                options = ConvertOptions(task=self.task,
+                                         classes=requested_classes if classes is None else classes)
+                converted_classes = convert_data_to_yolo(
+                    ann_in, staging, self.annotation_format, options)
+                if classes is None:
+                    classes = converted_classes
+                elif converted_classes != classes:
+                    raise ValueError(f"不同源 split 的类别顺序不一致: {ann_in}")
+            assert classes is not None
 
             image_index, labels_per_image, label_bytes = self._scan(staging, classes)
+
+            missing_labels = sorted(set(image_index) - set(label_bytes))
+            missing_images = sorted(set(label_bytes) - set(image_index))
+            if missing_labels or missing_images:
+                raise ValueError(
+                    "图像与标注无法一一配对: "
+                    f"缺标签={len(missing_labels)} {missing_labels[:20]}, "
+                    f"缺图片={len(missing_images)} {missing_images[:20]}。"
+                    "合法负样本必须提供空标签（YOLO）或在 COCO images 中声明。")
 
             report = analyze_balance(
                 dict(labels_per_image), classes,
@@ -162,24 +172,33 @@ class DatasetPipeline:
                 logger.info(line)
             warn_if_rare(report)
 
-            stems = sorted(set(image_index) & set(label_bytes))
+            stems = sorted(image_index)
             splits = split_dataset(
                 stems, self.train_rate, self.val_rate, self.random_state,
                 strategy=self.split_strategy,
-                labels_per_image={s: labels_per_image.get(s, []) for s in stems})
+                labels_per_image={s: labels_per_image.get(s, []) for s in stems},
+                group_per_image=self._layout.source_split_per_image)
+
+            if self.split_strategy == SplitStrategy.PRESERVE_SOURCE:
+                total = len(stems)
+                ratios = tuple(round(len(splits[s]) / total, 6) for s in _SPLITS)
+            else:
+                ratios = (self.train_rate, self.val_rate,
+                          round(1 - self.train_rate - self.val_rate, 6))
 
             manifest = SplitManifest.build(
                 dataset=self.dataset, strategy=self.split_strategy,
                 seed=self.random_state,
-                ratios=(self.train_rate, self.val_rate,
-                        round(1 - self.train_rate - self.val_rate, 6)),
+                ratios=ratios,
                 names=classes, splits=splits, label_bytes=label_bytes,
+                image_paths=image_index,
                 created_at=run.created_at)
             manifest_path = run.artifact_path("manifest.json")
             manifest.write(manifest_path)
             manifest_ref = manifest_path.relative_to(paths.ROOT_DIR).as_posix()
 
-            source = SplitSourceDirs(images=self.raw_images, labels=staging)
+            source = SplitSourceDirs(images=self._layout.root / "images", labels=staging,
+                                     image_index=image_index)
             counts = materialize(manifest, source, out)
 
             yaml_path = paths.dataset_yaml_path(self.dataset)

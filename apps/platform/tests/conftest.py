@@ -2,18 +2,31 @@
 """D4 测试夹具:全部基于 D3 真实产物的【拷贝】,绝不改 data/processed 原样。"""
 from pathlib import Path
 import shutil
+import runpy
 
 import pytest
 import yaml
 
 from od_platform.common import paths
+from od_platform.common.lineage import TOOL_VERSION
 from od_platform.data_pipeline.orchestrator import DatasetPipeline
 
 
 def _ensure_demo_yaml() -> Path:
     """确保 D3 已产出 demo;没跑过就现场跑一遍。"""
     yaml_path = paths.dataset_yaml_path("demo")
-    if not yaml_path.exists():
+    needs_rebuild = True
+    if yaml_path.exists():
+        doc = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+        root = Path(doc.get("path", ""))
+        if not root.is_absolute():
+            root = (yaml_path.parent / root).resolve()
+        manifest = paths.ROOT_DIR / (doc.get("odp_meta") or {}).get("manifest_path", "-")
+        needs_rebuild = (not root.exists() or not manifest.exists()
+                         or (doc.get("odp_meta") or {}).get("tool_version") != TOOL_VERSION)
+    if needs_rebuild:
+        script = paths.ROOT_DIR / "scripts" / "demo_data" / "make_demo.py"
+        runpy.run_path(str(script))
         DatasetPipeline("demo", "pascal_voc",
                         split_strategy="stratified_multilabel").run()
     return yaml_path
@@ -73,6 +86,30 @@ def demo_yaml_tampered_label(tmp_path) -> Path:
         lbl.write_text(lbl.read_text(encoding="utf-8") + "1 0.50 0.50 0.20 0.20\n",
                        encoding="utf-8")
     return _make_variant(tmp_path, "tampered_label", mutate)
+
+
+@pytest.fixture
+def demo_yaml_corrupt_image(tmp_path) -> Path:
+    """破坏一个图片文件，图片可读性和图片 lineage 都必须抓住。"""
+    def mutate(root: Path):
+        image = sorted((root / "images" / "train").glob("*"))[0]
+        image.write_bytes(b"not-an-image")
+    return _make_variant(tmp_path, "corrupt_image", mutate)
+
+
+@pytest.fixture
+def demo_yaml_missing_image(tmp_path) -> Path:
+    def mutate(root: Path):
+        sorted((root / "images" / "train").glob("*"))[0].unlink()
+    return _make_variant(tmp_path, "missing_image", mutate)
+
+
+@pytest.fixture
+def demo_yaml_illegal_class(tmp_path) -> Path:
+    def mutate(root: Path):
+        label = _first_label(root, "train")
+        label.write_text("999 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+    return _make_variant(tmp_path, "illegal_class", mutate)
 
 
 # ---- 下篇夹具 ----

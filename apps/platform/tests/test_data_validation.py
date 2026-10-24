@@ -42,6 +42,26 @@ def test_manifest_lineage_flags_tampered_label(demo_yaml_tampered_label):
     assert r.details["n_changed"] >= 1
 
 
+def test_corrupt_image_is_error_and_breaks_lineage(demo_yaml_corrupt_image):
+    readable = _run(demo_yaml_corrupt_image, "image_readability")
+    lineage = _run(demo_yaml_corrupt_image, "manifest_lineage")
+    assert readable.severity == CheckSeverity.ERROR
+    assert readable.details["broken"] == 1
+    assert lineage.severity == CheckSeverity.ERROR
+    assert lineage.details["n_changed_images"] == 1
+
+
+def test_missing_image_breaks_manifest_lineage(demo_yaml_missing_image):
+    lineage = _run(demo_yaml_missing_image, "manifest_lineage")
+    assert lineage.severity == CheckSeverity.ERROR
+    assert lineage.details["n_missing_images"] == 1
+
+
+def test_illegal_class_id_is_error(demo_yaml_illegal_class):
+    result = _run(demo_yaml_illegal_class, "label_format")
+    assert result.severity == CheckSeverity.ERROR
+
+
 def test_exit_code_blocks_on_error(demo_yaml_tampered_label):
     """端到端:有 ERROR → overall=ERROR(CLI 退出码 2)。"""
     report = validate_dataset(demo_yaml_tampered_label, write_report=False)
