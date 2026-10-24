@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -60,3 +61,48 @@ def test_discovers_split_coco_with_separate_image_and_annotation_roots(tmp_path)
         "train": "train", "val": "val", "test": "test"}
     assert [p.name for _, p in layout.annotation_dirs] == [
         "instances_train.json", "instances_val.json", "instances_test.json"]
+
+
+def test_discovers_coco_with_split_dirs_and_sibling_json_files(tmp_path):
+    root = tmp_path / "archive" / "dataset" / "instance_version"
+    for split in ("train", "val"):
+        _touch(root / split / f"{split}.jpg")
+        (root / f"instances_{split}_trashcan.json").write_text(
+            "{}", encoding="utf-8")
+    layout = discover_source_layout(tmp_path, AnnotationFormat.COCO)
+    assert layout.root == root
+    assert layout.source_split_per_image == {"train": "train", "val": "val"}
+    assert [p.name for _, p in layout.annotation_dirs] == [
+        "instances_train_trashcan.json", "instances_val_trashcan.json"]
+
+
+def test_discovers_nested_coco_with_shared_images_and_split_json(tmp_path):
+    root = tmp_path / "archive" / "coco" / "coco"
+    for split in ("train", "val", "test"):
+        image_name = f"{split}.jpg"
+        _touch(root / "images" / image_name)
+        (root / f"{split}_annotations.json").write_text(
+            json.dumps({"images": [{"id": split, "file_name": image_name}]}),
+            encoding="utf-8")
+
+    layout = discover_source_layout(tmp_path, AnnotationFormat.COCO)
+
+    assert layout.root == root
+    assert layout.source_split_per_image == {
+        "train": "train", "val": "val", "test": "test"}
+    assert [p.name for _, p in layout.annotation_dirs] == [
+        "train_annotations.json", "val_annotations.json", "test_annotations.json"]
+
+
+def test_rejects_unreferenced_image_in_shared_coco_layout(tmp_path):
+    root = tmp_path / "coco"
+    _touch(root / "images" / "train.jpg")
+    _touch(root / "images" / "val.jpg")
+    _touch(root / "images" / "unused.jpg")
+    for split in ("train", "val"):
+        (root / f"{split}_annotations.json").write_text(
+            json.dumps({"images": [{"id": split, "file_name": f"{split}.jpg"}]}),
+            encoding="utf-8")
+
+    with pytest.raises(ValueError, match="未被任何 split JSON 引用"):
+        discover_source_layout(tmp_path, AnnotationFormat.COCO)
