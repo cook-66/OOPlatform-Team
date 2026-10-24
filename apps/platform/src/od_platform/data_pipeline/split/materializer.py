@@ -47,10 +47,12 @@ class SplitSourceDirs:
     """raw 侧的图源与标注源。"""
     images: Path
     labels: Path
+    image_index: dict[str, Path] | None = None
 
     def resolve(self, stem: str) -> tuple[Path, Path]:
         """按 stem 找到 (图像文件, 标签文件)。同 stem 多扩展名给 warning;缺文件直接报错。"""
-        imgs = sorted(self.images.glob(f"{stem}.*"))
+        imgs = ([self.image_index[stem]] if self.image_index and stem in self.image_index
+                else sorted(self.images.glob(f"{stem}.*")))
         if not imgs:
             raise FileNotFoundError(f"图像缺失: {self.images}/{stem}.*")
         if len(imgs) > 1:

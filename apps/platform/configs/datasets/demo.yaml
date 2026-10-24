@@ -1,4 +1,4 @@
-path: D:/ODPlatform/data/processed/demo
+path: ../../../../data/processed/demo
 train: images/train
 val: images/val
 test: images/test
@@ -11,10 +11,10 @@ odp_meta:
   dataset_name: demo
   source_format: pascal_voc
   task: detect
-  tool_version: odp-transform/0.4
-  created_at: '2026-10-22T09:43:28'
-  contract_fingerprint: 08c961623071605a5b0d17b14f94d3fe9f97a12a3e936d5f1858720caa43d275
-  manifest_path: runs/data_pipeline/20261022-094328/manifest.json
+  tool_version: odp-transform/0.5
+  created_at: '2026-10-24T10:44:23'
+  contract_fingerprint: b6d2ec5747147dfda33e686e386a02782d1049f5f65f0057325f1ae76ae8e168
+  manifest_path: runs/data_pipeline/20261024-104423/manifest.json
   split:
     strategy: stratified_multilabel
     seed: 42

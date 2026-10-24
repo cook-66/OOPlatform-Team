@@ -18,7 +18,7 @@ from od_platform.data_pipeline.convert.registry import ConvertOptions, register_
 def convert_coco(input_dir: Path, output_labels_dir: Path,
                  options: ConvertOptions) -> list[str]:
     output_labels_dir.mkdir(parents=True, exist_ok=True)
-    json_files = sorted(input_dir.glob("*.json"))
+    json_files = [input_dir] if input_dir.is_file() else sorted(input_dir.glob("*.json"))
     if not json_files:
         raise FileNotFoundError(f"在 {input_dir} 下没有找到任何 .json 标注文件")
     data = json.loads(json_files[0].read_text(encoding="utf-8"))

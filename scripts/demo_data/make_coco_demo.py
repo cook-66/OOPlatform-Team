@@ -3,6 +3,7 @@
 每张图有 bbox(检测)+ segmentation 多边形(分割),前 2 张额外含稀有类 反光衣。
 """
 import json
+from PIL import Image
 from od_platform.common.paths import RAW_DATA_DIR
 
 ROOT = RAW_DATA_DIR / "demococo"
@@ -14,7 +15,7 @@ ANN.mkdir(parents=True, exist_ok=True)
 images, anns = [], []
 for i in range(8):
     stem = f"co_{i:03d}"
-    (IMG / f"{stem}.jpg").write_bytes(b"")
+    Image.new("RGB", (16, 12), (i, 60, 100)).save(IMG / f"{stem}.jpg")
     images.append({"id": i, "file_name": f"{stem}.jpg", "width": 640, "height": 480})
     anns.append({"id": len(anns), "image_id": i, "category_id": 1,
                  "bbox": [40 + i, 50, 120, 140],

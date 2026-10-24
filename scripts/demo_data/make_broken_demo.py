@@ -2,6 +2,7 @@
 """生成残缺演示数据集 data/raw/broken/:10 张图,只有 1 个标注(模拟标注导出中断)。
 用途:验证 odp-transform 的覆盖率前置闸门 —— 应直接拒绝(退出码 1)。
 """
+from PIL import Image
 from od_platform.common.paths import RAW_DATA_DIR
 
 ROOT = RAW_DATA_DIR / "broken"
@@ -16,7 +17,7 @@ XML = ("<annotation><size><width>640</width><height>480</height></size>\n"
        "</annotation>\n")
 
 for i in range(10):
-    (IMG / f"b_{i:03d}.jpg").write_bytes(b"")
+    Image.new("RGB", (16, 12), (i, 20, 30)).save(IMG / f"b_{i:03d}.jpg")
 (ANN / "b_000.xml").write_text(XML, encoding="utf-8")   # 只有 1 个标注:覆盖率 10%
 
 print(f"残缺演示集就绪: 图 10 张, 标注 1 个 -> {ROOT}")

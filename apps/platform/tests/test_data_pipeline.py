@@ -19,7 +19,8 @@ def test_registries_populated():
     assert conv[AnnotationFormat.COCO].supports(Task.SEGMENT)
     assert not conv[AnnotationFormat.PASCAL_VOC].supports(Task.SEGMENT)
     strats = list_strategies()
-    assert set(strats) >= {SplitStrategy.RANDOM, SplitStrategy.STRATIFIED_MULTILABEL}
+    assert set(strats) >= {SplitStrategy.RANDOM, SplitStrategy.STRATIFIED_MULTILABEL,
+                           SplitStrategy.PRESERVE_SOURCE}
     assert strats[SplitStrategy.STRATIFIED_MULTILABEL].requires_labels
 
 
@@ -76,3 +77,12 @@ def test_coverage_gate_rejects_broken():
     pipe = DatasetPipeline("broken", AnnotationFormat.PASCAL_VOC)
     with pytest.raises(ValueError, match="覆盖率"):
         pipe.run()
+
+
+def test_preserve_source_keeps_declared_split():
+    stems = ["train_a", "train_b", "val_a", "test_a"]
+    source = {"train_a": "train", "train_b": "train", "val_a": "val", "test_a": "test"}
+    splits = split_dataset(stems, strategy=SplitStrategy.PRESERVE_SOURCE,
+                           group_per_image=source)
+    assert splits == {"train": ["train_a", "train_b"], "val": ["val_a"],
+                      "test": ["test_a"]}

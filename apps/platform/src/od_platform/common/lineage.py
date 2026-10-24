@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
-TOOL_VERSION = "odp-transform/0.4"       # 契约版本:指纹配方变动时升号
+TOOL_VERSION = "odp-transform/0.5"       # 0.5:样本身份同时覆盖图片与标签
 
 
 def _sha256_bytes(b: bytes) -> str:
@@ -54,6 +54,8 @@ def compute_data_fingerprint(samples: List["SampleLineage"]) -> str:
     纯派生: 原料(每条 sha256)本就在 manifest.samples 里, 不改 manifest 格式、
     不重跑 D3、历史 manifest 立即可用。
     """
+    if any(s.image_sha256 for s in samples):
+        return canonical_sha256(sorted((s.stem, s.image_sha256, s.sha256) for s in samples))
     return canonical_sha256(sorted((s.stem, s.sha256) for s in samples))
 
 
@@ -63,6 +65,7 @@ class SampleLineage:
     stem: str
     split: str
     sha256: str
+    image_sha256: str = ""
 
 
 def compute_contract_fingerprint(
@@ -85,7 +88,9 @@ def compute_contract_fingerprint(
         "seed": seed,
         "ratios": [round(float(r), 6) for r in ratios],
         "names": list(names),
-        "samples": sorted((s.stem, s.split, s.sha256) for s in samples),
+        "samples": (sorted((s.stem, s.split, s.image_sha256, s.sha256) for s in samples)
+                    if any(s.image_sha256 for s in samples)
+                    else sorted((s.stem, s.split, s.sha256) for s in samples)),
         "tool_version": tool_version,
     }
     return canonical_sha256(canonical)
@@ -115,11 +120,13 @@ class SplitManifest:
         names: list[str],
         splits: dict[str, list[str]],
         label_bytes: dict[str, bytes],
+        image_paths: dict[str, Path] | None = None,
         created_at: str = "",
     ) -> SplitManifest:
         """从划分结果 + 标签字节构建契约。label_bytes 以 stem 为键。"""
         samples = [
-            SampleLineage(stem, split, _sha256_bytes(label_bytes[stem]))
+            SampleLineage(stem, split, _sha256_bytes(label_bytes[stem]),
+                          _sha256_bytes(image_paths[stem].read_bytes()) if image_paths else "")
             for split, stems in splits.items()
             for stem in stems
         ]

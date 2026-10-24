@@ -11,7 +11,7 @@
     ① 我自己算的         从盘上(经 manifest)重算 data_fingerprint   ← 一手证据
     ② D3 的 transform 章  它划分时盖的 data_fingerprint
     ③ D4 的 validate 章   它验证时盖的 data_fingerprint + 结论
-三者一致, 且 D4 章为 PASS → 闭合。
+三者一致，且 D4 结论不是 ERROR → 闭合并按分级规则放行。
 
 ★ 本模块不【发明】身份, 只【确认】身份(阶段 4.5)。它自己算一枚指纹, 不是为了造一个
   新真相, 而是拿去和上游的章核对 —— "我摸到的, 是不是你们说的那一个"。
@@ -31,8 +31,13 @@ import yaml
 from od_platform.common import stamp
 from od_platform.common.lineage import compute_data_fingerprint
 from od_platform.data_validation.checks._lineage import load_manifest_from_yaml
+from od_platform.data_validation.registry import CheckSeverity
 
 logger = logging.getLogger(__name__)
+
+_KNOWN_SEVERITIES = frozenset({
+    CheckSeverity.PASS, CheckSeverity.INFO, CheckSeverity.WARNING, CheckSeverity.ERROR,
+})
 
 
 @dataclass(frozen=True)
@@ -60,6 +65,12 @@ class DataIdentity:
         return bool(self.validate_stamp) and \
             self.validate_stamp.get("overall_severity") == "PASS"
 
+    @property
+    def validation_severity(self) -> Optional[str]:
+        """保留 D4 原始结论，INFO/WARNING 不伪装成 PASS。"""
+        value = (self.validate_stamp or {}).get("overall_severity")
+        return value if isinstance(value, str) else None
+
     def to_dict(self) -> Dict[str, Any]:
         """给 odp_audit.json —— 回答判据第 4 问: 数据是哪一份、出身与验证清不清楚。"""
         return {
@@ -67,6 +78,7 @@ class DataIdentity:
             "contract_fingerprint": self.contract_fingerprint,
             "reconciled":           self.reconciled,           # 三方指纹一致?
             "validated_pass":       self.validated_pass,       # D4 章在且 PASS?
+            "validation_severity":  self.validation_severity,
             # 只记"我确认了这两枚章存在及其关键字段", 不整份转抄它们的内容
             "transform_stamp_seen": self.transform_stamp is not None,
             "validate_stamp_seen":  self.validate_stamp is not None,
@@ -96,8 +108,9 @@ def reconcile_data_identity(yaml_path: Path, *, require_validated: bool = True) 
 
     Args:
         yaml_path:         数据集 yaml 的绝对路径(调用方用 refs 解析好)
-        require_validated: True(默认)= D4 章缺失/非 PASS 则 ok=False(拒绝开训);
-                           False = 只对账、不因未验证而拒绝(给"明知故犯"留口子)
+        require_validated: True(默认)= D4 章缺失/ERROR 则 ok=False；
+                           PASS/INFO/WARNING 按 D4 分级语义放行。
+                           False = 保留显式 --skip-validate 语义。
 
     Returns:
         DataIdentity。ok=False 时 reason 是人话, 调用方据此拒绝开训。
@@ -122,14 +135,25 @@ def reconcile_data_identity(yaml_path: Path, *, require_validated: bool = True) 
         transform_stamp=d3, validate_stamp=d4, notes=notes,
     )
 
+    def reject(reason: str) -> DataIdentity:
+        return DataIdentity(
+            ok=False, reason=reason, data_fingerprint=data_fp,
+            contract_fingerprint=contract_fp, transform_stamp=d3,
+            validate_stamp=d4, notes=notes)
+
     # —— 判定 ——
     # D3 章不在: 缺证据, 不是罪证。警告不阻断(可能是老数据集, 盖章能力上线前划的)。
     if d3 is None:
         notes.append("未找到 D3 的 transform 章 —— 这批数据可能在盖章能力上线前划分, "
                      "或流转卡目录被清理。出身链不完整, 但不阻断。")
         logger.warning(notes[-1])
+    else:
+        if d3.get("data_fingerprint") != data_fp:
+            return reject("D3 transform 章的数据指纹与当前数据不一致, 拒绝开训。")
+        if d3.get("contract_fingerprint") != contract_fp:
+            return reject("D3 transform 章的契约指纹与当前划分不一致, 拒绝开训。")
 
-    # D4 章: 这是"验过没"的答案。缺失或非 PASS, 默认拒绝(require_validated)。
+    # D4 章:缺失默认拒绝；存在时先核结构和身份，再按严重度分级。
     if d4 is None:
         msg = "未找到 D4 的 validate 章 —— 这批数据没有经过验证。"
         if require_validated:
@@ -138,14 +162,33 @@ def reconcile_data_identity(yaml_path: Path, *, require_validated: bool = True) 
                                 transform_stamp=d3, validate_stamp=None, notes=notes)
         notes.append(msg + " (--skip-validate: 继续, 但审计将标记未验证)")
         logger.warning(notes[-1])
-    elif d4.get("overall_severity") != "PASS":
-        msg = f"D4 的 validate 章结论为 {d4.get('overall_severity')}, 非 PASS。"
-        if require_validated:
-            return DataIdentity(ok=False, reason=msg + " 数据未通过验证, 拒绝开训。",
-                                data_fingerprint=data_fp, contract_fingerprint=contract_fp,
-                                transform_stamp=d3, validate_stamp=d4, notes=notes)
-        notes.append(msg + " (--skip-validate: 继续)")
-        logger.warning(notes[-1])
+    else:
+        required = ("stage", "data_fingerprint", "contract_fingerprint",
+                    "overall_severity", "run_id", "tool_version")
+        missing = [key for key in required if not d4.get(key)]
+        if missing or d4.get("stage") != "validate":
+            detail = f"缺少字段 {missing}" if missing else f"stage={d4.get('stage')!r}"
+            return reject(f"D4 validate 章无效({detail}), 拒绝开训。")
+        if d4.get("data_fingerprint") != data_fp:
+            return reject("D4 validate 章的数据指纹与当前数据不一致, 拒绝开训。")
+        if d4.get("contract_fingerprint") != contract_fp:
+            return reject("D4 validate 章的契约指纹与当前划分不一致, 拒绝开训。")
+
+        severity = d4.get("overall_severity")
+        if severity not in _KNOWN_SEVERITIES:
+            return reject(f"D4 validate 章包含未知严重度 {severity!r}, 拒绝开训。")
+        if severity == CheckSeverity.ERROR:
+            msg = "D4 的 validate 章结论为 ERROR —— 存在必须修复的数据问题。"
+            if require_validated:
+                return reject(msg + " 拒绝开训。")
+            notes.append(msg + " (--skip-validate: 明知故犯继续)")
+            logger.warning(notes[-1])
+        elif severity == CheckSeverity.WARNING:
+            notes.append("D4 的 validate 章结论为 WARNING —— 可训练但建议处理, 本次按规范放行。")
+            logger.warning(notes[-1])
+        elif severity == CheckSeverity.INFO:
+            notes.append("D4 的 validate 章结论为 INFO —— 非阻断提示, 本次按规范放行。")
+            logger.info(notes[-1])
 
     # 三方对账: 指纹是否闭合(不阻断, 但记进审计与日志)
     if identity.reconciled:

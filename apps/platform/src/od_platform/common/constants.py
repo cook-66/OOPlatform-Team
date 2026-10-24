@@ -32,13 +32,14 @@ RATE_EPSILON: float = 1e-6             # 浮点比例和的容差
 
 
 class SplitStrategy:
-    """划分策略名(注册表键、CLI choices 共用)。当前两种:随机 / 多标签分层。"""
+    """划分策略名(注册表键、CLI choices 共用)。"""
     RANDOM = "random"
     STRATIFIED_MULTILABEL = "stratified_multilabel"
+    PRESERVE_SOURCE = "preserve_source"
 
     @classmethod
     def all(cls) -> tuple[str, ...]:
-        return (cls.RANDOM, cls.STRATIFIED_MULTILABEL)
+        return (cls.RANDOM, cls.STRATIFIED_MULTILABEL, cls.PRESERVE_SOURCE)
 
 
 DEFAULT_SPLIT_STRATEGY: str = SplitStrategy.RANDOM
