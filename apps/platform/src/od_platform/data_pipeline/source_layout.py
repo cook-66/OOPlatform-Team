@@ -62,6 +62,18 @@ def discover_source_layout(raw_root: Path, annotation_format: str) -> SourceLayo
     if annotation_format == AnnotationFormat.COCO:
         coco_candidates: list[tuple[Path, list[tuple[str, Path]], list[tuple[str, Path]]]] = []
         for candidate in [raw_root, *(p for p in raw_root.rglob("*") if p.is_dir())]:
+            # TrashCan/Detectron 风格: train|val|test/ + instances_<split>*.json
+            image_dirs = []
+            anno_files = []
+            for disk_name, normalized in _SOURCE_SPLITS.items():
+                image_dir = candidate / disk_name
+                matches = sorted(candidate.glob(f"instances_{disk_name}*.json"))
+                if image_dir.is_dir() and len(matches) == 1:
+                    image_dirs.append((normalized, image_dir))
+                    anno_files.append((normalized, matches[0]))
+            if {s for s, _ in image_dirs} >= {"train", "val"}:
+                coco_candidates.append((candidate, image_dirs, anno_files))
+
             # 常见导出: imgs/{train,val,test} + annotations[/coco]/instances_*.json
             for image_base_name in ("images", "imgs"):
                 image_base = candidate / image_base_name

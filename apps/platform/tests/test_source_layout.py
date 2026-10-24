@@ -60,3 +60,16 @@ def test_discovers_split_coco_with_separate_image_and_annotation_roots(tmp_path)
         "train": "train", "val": "val", "test": "test"}
     assert [p.name for _, p in layout.annotation_dirs] == [
         "instances_train.json", "instances_val.json", "instances_test.json"]
+
+
+def test_discovers_coco_with_split_dirs_and_sibling_json_files(tmp_path):
+    root = tmp_path / "archive" / "dataset" / "instance_version"
+    for split in ("train", "val"):
+        _touch(root / split / f"{split}.jpg")
+        (root / f"instances_{split}_trashcan.json").write_text(
+            "{}", encoding="utf-8")
+    layout = discover_source_layout(tmp_path, AnnotationFormat.COCO)
+    assert layout.root == root
+    assert layout.source_split_per_image == {"train": "train", "val": "val"}
+    assert [p.name for _, p in layout.annotation_dirs] == [
+        "instances_train_trashcan.json", "instances_val_trashcan.json"]
