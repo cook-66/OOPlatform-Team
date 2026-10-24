@@ -1,6 +1,7 @@
 """识别原始数据目录，兼容压缩包外层目录与 Roboflow 预划分布局。"""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,6 +40,57 @@ def _index_images(items: list[tuple[str | None, Path]]) -> tuple[dict[str, Path]
     if not index:
         raise FileNotFoundError("识别到 images 目录，但其中没有受支持的图片")
     return index, source_splits or None
+
+
+def _index_coco_shared_images(
+    image_dir: Path, annotation_files: list[tuple[str, Path]],
+) -> tuple[dict[str, Path], dict[str, str]]:
+    """索引共用 images/、按 JSON 保存 split 的 COCO 导出。"""
+    all_images = _images(image_dir)
+    by_relative = {
+        image.relative_to(image_dir).as_posix(): image for image in all_images
+    }
+    by_name: dict[str, list[Path]] = {}
+    for image in all_images:
+        by_name.setdefault(image.name, []).append(image)
+
+    index: dict[str, Path] = {}
+    source_splits: dict[str, str] = {}
+    referenced: set[Path] = set()
+    for split, annotation_file in annotation_files:
+        document = json.loads(annotation_file.read_text(encoding="utf-8"))
+        for item in document.get("images", []):
+            file_name = Path(str(item["file_name"])).as_posix()
+            while file_name.startswith("./"):
+                file_name = file_name[2:]
+            if not file_name or file_name.startswith("../") or Path(file_name).is_absolute():
+                raise ValueError(
+                    f"COCO 标注包含不安全的图片路径: {file_name!r} "
+                    f"(标注: {annotation_file})")
+            image = by_relative.get(file_name)
+            if image is None:
+                matches = by_name.get(Path(file_name).name, [])
+                if len(matches) != 1:
+                    raise FileNotFoundError(
+                        f"COCO 标注引用的图片无法唯一定位: {file_name!r} "
+                        f"(标注: {annotation_file})")
+                image = matches[0]
+            if image.stem in index:
+                raise ValueError(
+                    f"COCO split 间图片 stem 冲突或重复引用: {image.stem!r}: "
+                    f"{index[image.stem]} 与 {image}")
+            index[image.stem] = image
+            source_splits[image.stem] = split
+            referenced.add(image)
+
+    unreferenced = sorted(set(all_images) - referenced)
+    if unreferenced:
+        raise ValueError(
+            f"共用 images 目录中有 {len(unreferenced)} 张图片未被任何 split JSON 引用: "
+            f"{[str(p) for p in unreferenced[:20]]}")
+    if not index:
+        raise FileNotFoundError("识别到 COCO images 目录，但 split JSON 没有声明图片")
+    return index, source_splits
 
 
 def _classes_hint(root: Path) -> list[str] | None:
@@ -103,6 +155,16 @@ def discover_source_layout(raw_root: Path, annotation_format: str) -> SourceLayo
             if {s for s, _ in image_dirs} >= {"train", "val"}:
                 coco_candidates.append((candidate, image_dirs, anno_files))
 
+            # COU 类导出:共用 images/ + train|val|test_annotations.json
+            image_dir = candidate / "images"
+            anno_files = []
+            for disk_name, normalized in _SOURCE_SPLITS.items():
+                annotation_file = candidate / f"{disk_name}_annotations.json"
+                if annotation_file.is_file():
+                    anno_files.append((normalized, annotation_file))
+            if image_dir.is_dir() and {s for s, _ in anno_files} >= {"train", "val"}:
+                coco_candidates.append((candidate, [("shared", image_dir)], anno_files))
+
         unique = {str(c[0].resolve()): c for c in coco_candidates}
         coco_candidates = list(unique.values())
         if len(coco_candidates) > 1:
@@ -110,7 +172,10 @@ def discover_source_layout(raw_root: Path, annotation_format: str) -> SourceLayo
                              f"{[str(c[0]) for c in coco_candidates]}")
         if coco_candidates:
             root, image_dirs, anno_files = coco_candidates[0]
-            index, source = _index_images(image_dirs)
+            if len(image_dirs) == 1 and image_dirs[0][0] == "shared":
+                index, source = _index_coco_shared_images(image_dirs[0][1], anno_files)
+            else:
+                index, source = _index_images(image_dirs)
             return SourceLayout(root, index, tuple(anno_files), source, None)
 
     presplit: list[tuple[Path, list[tuple[str, Path]], list[tuple[str, Path]]]] = []
