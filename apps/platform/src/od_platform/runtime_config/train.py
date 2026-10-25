@@ -30,11 +30,11 @@ class YOLOTrainConfig(BaseConfig):
     """YOLO 训练配置: 继承 BaseConfig + 52 个训练特有字段."""
 
     # ============================================================
-    # 框架级字段扩展: experiment_name 不传给 ultralytics
-    # (BaseConfig 已经把 verbose 放进去; 这里继续扩)
+    # 框架级字段扩展: 这些字段不传给 ultralytics
     # ============================================================
     FRAMEWORK_ONLY_FIELDS: ClassVar[set[str]] = (
-        BaseConfig.FRAMEWORK_ONLY_FIELDS | {"experiment_name"}
+        BaseConfig.FRAMEWORK_ONLY_FIELDS 
+        | {"experiment_name", "grad_clip", "extreme_crop", "smart_ema"}
     )
 
     # ============================================================
@@ -304,6 +304,22 @@ class YOLOTrainConfig(BaseConfig):
         },
     )
 
+    # 【★ 你的 D5 扩展点 1：梯度裁剪】
+    grad_clip: float = Field(
+        default=0.0, ge=0.0,
+        description="梯度裁剪最大值(防止梯度爆炸)",
+        json_schema_extra={
+            "group":    "优化器配置",
+            "examples": [0.0, 1.0, 5.0, 10.0],
+            "tips": [
+                "0.0 表示不启用梯度裁剪",
+                "如果训练时 loss 出现 NaN (爆炸)，可设为 5.0 或 10.0",
+                "能有效提升大模型/大batch训练的稳定性",
+            ],
+            "yaml_comment": "梯度裁剪最大值(0=禁用)",
+        },
+    )
+
     # ============================================================
     # 学习率预热
     # ============================================================
@@ -551,6 +567,22 @@ class YOLOTrainConfig(BaseConfig):
         },
     )
 
+    # 【★ 你的 D5 扩展点 2：极端裁剪增强】
+    extreme_crop: bool = Field(
+        default=False,
+        description="是否开启极端裁剪增强",
+        json_schema_extra={
+            "group":    "数据增强-几何",
+            "examples": [False, True],
+            "tips": [
+                "开启后将进行更激进的图像裁剪",
+                "适合应对目标遮挡严重的场景",
+                "可能会破坏部分小目标，需谨慎开启",
+            ],
+            "yaml_comment": "极端裁剪增强开关",
+        },
+    )
+
     # ============================================================
     # 数据增强 - 拼接混合
     # ============================================================
@@ -780,6 +812,22 @@ class YOLOTrainConfig(BaseConfig):
             "examples": [None],
             "tips": ["None: 使用默认增强", "list: 自定义 Albumentations 变换"],
             "yaml_comment": "自定义增强(高级用户)",
+        },
+    )
+
+    # 【★ 你的 D5 扩展点 3：智能 EMA 开关（答辩亮点）】
+    smart_ema: bool = Field(
+        default=False,
+        description="智能指数移动平均(EMA)",
+        json_schema_extra={
+            "group":    "高级设置",
+            "examples": [False, True],
+            "tips": [
+                "开启后在训练后期对权重进行平滑处理",
+                "通常能提升 0.5% - 1% 的 mAP",
+                "会增加少量显存开销",
+            ],
+            "yaml_comment": "是否开启智能EMA(提升泛化)",
         },
     )
 

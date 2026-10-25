@@ -1,0 +1,111 @@
+# =============================================================================
+# ODPlatform —— Python 依赖锁定文件 (Python 3.12 / Windows x64)
+# =============================================================================
+# 由微信收到的 requirements.txt 规范化而来(原文件是 UTF-16 编码,pip 无法直接读),
+# 并修正了两处“只在原作者机器上成立”的写法:
+#
+#   [修正 1] 原文件里 torch / torchvision / torchaudio 指向本地 wheel:
+#              torch @ file:///D:/Tools/Anaconda/torch-2.5.1%2Bcu121-cp312-cp312-win_amd64.whl
+#            D:\Tools\Anaconda 在别的机器上并不存在,直接 pip install 会报错。
+#            这里改成同一个版本 + 同一个 CUDA 12.1 构建,从 PyTorch 官方索引拉取。
+#
+#   [修正 2] 原文件末尾有:
+#              -e git+https://github.com/cook-66/ODPlatform.git@ae431c1...#egg=od_platform
+#            那是“从 git 拉一份源码来装”。本地开发应当把【当前工作区的代码】装成可编辑包,
+#            所以改为在仓库根执行:  pip install -e apps/platform
+#            (见 README / 下方说明;不写进本文件,避免换目录执行时路径失效)
+#
+# 安装顺序:
+#   python -m venv .venv
+#   .venv\Scripts\activate
+#   pip install -r requirements.txt
+#   pip install -e apps/platform
+# =============================================================================
+
+# 让 torch 系从 PyTorch 官方 CUDA 12.1 索引取(文件内 --extra-index-url 只作用于本文件)
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+ast_serialize==0.13.1
+certifi==2026.10.19
+cfgv==3.5.0
+charset-normalizer==3.5.2
+click==8.5.0
+colorama==0.4.6
+colorlog==6.12.0
+contourpy==1.4.0
+coverage==7.16.2
+cycler==0.12.1
+distlib==0.4.4
+fastapi==0.159.1
+filelock==4.2.4
+fonttools==4.67.0
+fsspec==2026.9.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+identify==2.6.20
+idna==3.20
+iniconfig==2.3.1
+Jinja2==3.1.6
+kiwisolver==1.5.1
+librt==0.16.0
+MarkupSafe==3.0.4
+matplotlib==3.11.2
+mpmath==1.3.0
+mypy==2.4.0
+mypy_extensions==1.1.0
+networkx==3.7
+nodeenv==1.11.0
+numpy==2.5.4
+nvidia-ml-py==13.615.71
+opencv-python==5.0.0.93
+opentelemetry-api==1.45.1
+packaging==26.3
+pathspec==1.1.1
+pillow==13.0.0
+platformdirs==4.13.5
+pluggy==1.7.0
+polars==2.0.0
+polars-runtime-32==2.0.0
+pre_commit==4.7.0
+psutil==7.2.2
+pydantic==2.14.1
+pydantic_core==2.50.1
+Pygments==2.21.0
+pyparsing==3.3.3
+PySide6==6.12.0
+PySide6_Addons==6.12.0
+PySide6_Essentials==6.12.0
+PySide6_Pdf==6.12.0.140
+PySide6_WebEngine==6.12.0.140
+pytest==9.1.1
+pytest-cov==7.1.0
+python-dateutil==2.9.0.post0
+python-discovery==1.6.4
+python-multipart==0.0.32
+PyYAML==6.0.3
+requests==2.34.2
+ruff==0.17.1
+setuptools==84.2.1
+shiboken6==6.12.0
+six==1.17.0
+starlette==1.9.0
+sympy==1.13.1
+
+# --- [修正 1] 原为 file:///D:/Tools/Anaconda/*.whl,现从 cu121 官方索引取同版本同构建 ---
+torch==2.5.1+cu121
+torchaudio==2.5.1+cu121
+torchvision==0.20.1+cu121
+
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+ultralytics==8.4.183
+ultralytics-platform==0.1.90
+ultralytics-thop==2.2.3
+urllib3==2.8.0
+uvicorn==0.54.0
+virtualenv==21.14.12
+websockets==17.3
