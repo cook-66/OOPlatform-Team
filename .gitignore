@@ -81,3 +81,14 @@ temp/
 *.npz
 # 工具元数据(reset/doctor 等元工具的审计日志,本地运行历史)
 .odp-meta/
+
+
+# 本地数据库
+*.sqlite3
+
+# YOLO模型权重文件
+*.pt
+weights/
+
+# 临时文件夹
+_tmp_django_libs/
