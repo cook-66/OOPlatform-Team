@@ -90,6 +90,8 @@
         const previewTip = document.getElementById("preview-tip");
         const explanationEl = document.getElementById("explanation");
         const csrfToken = form.querySelector("input[name='csrfmiddlewaretoken']").value;
+        // 当前这次推理对应的数据库记录 id，保证解释能精确写回同一条记录
+        let currentRecordId = null;
 
         // 选择文件后本地预览
         form.image.addEventListener("change", () => {
@@ -122,6 +124,7 @@
                 }
 
                 // 2. 更新结果图与类别
+                currentRecordId = inferData.record_id;
                 previewEl.src = inferData.result_img_url;
                 previewEl.classList.remove("hidden");
                 previewTip.classList.add("hidden");
@@ -135,7 +138,10 @@
                         "Content-Type": "application/json",
                         "X-CSRFToken": csrfToken,
                     },
-                    body: JSON.stringify({ classes: inferData.classes }),
+                    body: JSON.stringify({
+                        classes: inferData.classes,
+                        record_id: currentRecordId,
+                    }),
                 });
                 const explainData = await explainResp.json();
                 explanationEl.textContent = explainData.explanation || "暂无解释";

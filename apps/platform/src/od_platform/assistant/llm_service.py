@@ -81,6 +81,11 @@ def _save_billing_record(video_name: str, tokens: int, cost: float):
         json.dump(records, f, ensure_ascii=False, indent=2)
 
 
+# Web 端对外入口：直接根据 {类别: 数量} 生成解释（不跑 YOLO）
+def generate_explanation(detect_info: dict) -> str:
+    return _ask_llm(detect_info)
+
+
 # ==========================================
 # 3. 对外暴露的接口
 # ==========================================
