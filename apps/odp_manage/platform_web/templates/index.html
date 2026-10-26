@@ -3,19 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>水下目标识别工具</title>
+    <title>ODPlatform · 水下智能视觉中枢</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
       body {
         background-color: #05070f;
         background-image:
           radial-gradient(
-            circle at 15% 20%,
+            circle at 12% 12%,
             rgba(56, 189, 248, 0.18),
             transparent 45%
           ),
           radial-gradient(
-            circle at 85% 10%,
+            circle at 88% 8%,
             rgba(129, 140, 248, 0.18),
             transparent 40%
           ),
@@ -27,381 +29,958 @@
           40px 40px,
           40px 40px;
       }
-
-      /* 顶部面板切换按钮 */
-      .tab-btn {
-        padding: 0.5rem 1.25rem;
-        border-radius: 0.6rem;
-        border: 1px solid #1e293b;
-        background-color: rgba(30, 41, 59, 0.7);
-        color: #94a3b8;
-        font-size: 0.875rem;
-        transition:
-          background-color 0.15s ease,
-          color 0.15s ease;
+      [v-cloak] {
+        display: none;
       }
-      .tab-btn:hover {
-        background-color: rgba(51, 65, 85, 0.8);
-        color: #e2e8f0;
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
       }
-      .tab-active {
-        background: linear-gradient(90deg, #06b6d4, #6366f1);
-        border-color: transparent;
-        color: #020617;
-        font-weight: 600;
+      ::-webkit-scrollbar-thumb {
+        background: #1e293b;
+        border-radius: 999px;
       }
     </style>
   </head>
-  <body class="min-h-screen text-slate-200 font-sans">
-    <!-- 顶部标题 -->
-    <header class="border-b border-slate-800/80 backdrop-blur">
-      <div
-        class="max-w-6xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-4"
-      >
-        <div>
-          <h1
-            class="text-2xl md:text-3xl font-bold tracking-wider bg-gradient-to-r from-cyan-300 via-sky-400 to-indigo-400 bg-clip-text text-transparent"
-          >
-            水下目标识别
-          </h1>
-          <p
-            class="mt-1 text-xs md:text-sm text-slate-500 tracking-widest uppercase"
-          >
-            Underwater target identification
-          </p>
-        </div>
-        <div class="flex items-center gap-3 text-xs">
-          <span
-            id="today-cost"
-            class="px-3 py-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-mono"
-          >
-            今日花费 ¥ 0.000000
-          </span>
-          <span class="flex items-center gap-2 text-emerald-400">
-            <span
-              class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"
-            ></span>
-            SYSTEM ONLINE
-          </span>
-        </div>
-      </div>
-    </header>
-
-    <!-- 面板切换按钮 -->
-    <nav class="max-w-6xl mx-auto px-6 pt-8 flex flex-wrap gap-3">
-      <button type="button" class="tab-btn tab-active" data-panel="panel-infer">
-        视觉推理
-      </button>
-      <button type="button" class="tab-btn" data-panel="panel-history">
-        推理记录
-      </button>
-      <button type="button" class="tab-btn" data-panel="panel-billing">
-        花费账单
-      </button>
-    </nav>
-
-    <main
-      id="panel-infer"
-      class="max-w-6xl mx-auto px-6 py-10 grid gap-8 lg:grid-cols-2"
-    >
-      <!-- 上传表单 -->
-      <section
-        class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6 shadow-[0_0_40px_-15px_rgba(56,189,248,0.6)]"
-      >
-        <h2
-          class="text-lg font-semibold text-cyan-300 mb-4 flex items-center gap-2"
-        >
-          <span class="w-1.5 h-5 bg-cyan-400 rounded-full"></span>图像 /
-          视频推理任务
-        </h2>
-
-        <form
-          id="infer-form"
-          method="post"
-          action="{% url 'api_infer' %}"
-          enctype="multipart/form-data"
-          class="space-y-4"
-        >
-          {% csrf_token %}
-          <label for="image" class="block text-sm text-slate-400"
-            >选择待检测图片或视频</label
-          >
-          <input
-            id="image"
-            name="image"
-            type="file"
-            accept="image/*,video/*"
-            required
-            class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 border border-slate-700 rounded-lg bg-slate-950/60 px-3 py-2"
-          />
-
-          <button
-            id="run-btn"
-            type="submit"
-            class="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-500 px-4 py-3 font-semibold text-slate-950 tracking-wide hover:from-cyan-400 hover:to-indigo-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            开始推理
-          </button>
-        </form>
-
-        <div class="mt-6 text-xs text-slate-500 space-y-1">
-          <p>
-            状态：<span id="status" class="text-slate-300">等待任务提交…</span>
-          </p>
-          <p>检测类别：<span id="classes" class="text-cyan-300">—</span></p>
-        </div>
-      </section>
-
-      <!-- 结果预览 + 智能解释 -->
-      <section
-        class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6"
-      >
-        <h2
-          class="text-lg font-semibold text-indigo-300 mb-4 flex items-center gap-2"
-        >
-          <span class="w-1.5 h-5 bg-indigo-400 rounded-full"></span>推理结果
-        </h2>
-
-        <div
-          class="rounded-xl border border-slate-800 bg-slate-950/70 flex items-center justify-center min-h-[240px] overflow-hidden"
-        >
-          <img
-            id="preview"
-            src=""
-            alt="结果预览"
-            class="hidden max-h-[320px] w-auto object-contain"
-          />
-          <video
-            id="preview-video"
-            controls
-            playsinline
-            webkit-playsinline
-            class="hidden max-h-[320px] w-auto object-contain"
-          ></video>
-          <span id="preview-tip" class="text-slate-600 text-sm"
-            >暂无预览图</span
-          >
-        </div>
-
-        <h3 class="mt-6 text-sm font-semibold text-slate-300">智能解释</h3>
-        <div
-          id="explanation"
-          class="mt-2 rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-relaxed text-slate-400 min-h-[96px]"
-        >
-          等待模型返回解释…
-        </div>
-
-        <div
-          id="cost-box"
-          class="mt-4 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-4 flex items-center justify-between shadow-[0_0_30px_-12px_rgba(251,191,36,0.8)]"
-        >
-          <span class="text-sm font-medium text-amber-200"
-            >💳 本次分析预估花费</span
-          >
-          <span class="font-mono text-lg font-bold text-amber-300">
-            ¥ <span id="cost-value">0.000000</span> 元
-          </span>
-        </div>
-      </section>
-    </main>
-
-    <!-- 区域 B：历史推理记录 -->
-    <main id="panel-history" class="hidden max-w-6xl mx-auto px-6 py-10">
-      <section
-        class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6"
-      >
-        <h2
-          class="text-lg font-semibold text-cyan-300 mb-4 flex items-center gap-2"
-        >
-          <span class="w-1.5 h-5 bg-cyan-400 rounded-full"></span>推理记录
-        </h2>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead
-              class="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500"
-            >
-              <tr>
-                <th class="py-3 px-3 font-medium">时间</th>
-                <th class="py-3 px-3 font-medium">目标</th>
-                <th class="py-3 px-3 font-medium">置信度</th>
-                <th class="py-3 px-3 font-medium">花费</th>
-                <th class="py-3 px-3 font-medium text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody
-              id="history-body"
-              class="divide-y divide-slate-800/80 text-slate-300"
-            >
-              <tr>
-                <td colspan="5" class="py-6 text-center text-slate-600">
-                  加载中…
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-
-    <!-- 区域 C：花费账单 -->
-    <main id="panel-billing" class="hidden max-w-6xl mx-auto px-6 py-10">
-      <section
-        class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6"
-      >
-        <h2
-          class="text-lg font-semibold text-amber-300 mb-4 flex items-center gap-2"
-        >
-          <span class="w-1.5 h-5 bg-amber-400 rounded-full"></span>花费账单
-        </h2>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div
-            class="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-6"
-          >
-            <p class="text-sm text-amber-200">今日总花费</p>
-            <p
-              id="billing-cost"
-              class="mt-2 font-mono text-3xl font-bold text-amber-300"
-            >
-              ¥ 0.000000
-            </p>
-          </div>
-          <div
-            class="rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-500/15 to-cyan-500/10 p-6"
-          >
-            <p class="text-sm text-indigo-200">今日总 Token</p>
-            <p
-              id="billing-tokens"
-              class="mt-2 font-mono text-3xl font-bold text-indigo-300"
-            >
-              0
-            </p>
-          </div>
-        </div>
-        <p class="mt-4 text-xs text-slate-500">
-          统计日期：<span id="billing-date">—</span>
-        </p>
-      </section>
-    </main>
-
-    <!-- 详情弹窗 -->
-    <div
-      id="detail-modal"
-      class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4"
-    >
-      <div
-        class="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+  <body class="min-h-screen text-slate-200 font-sans antialiased">
+    <div id="app" v-cloak class="min-h-screen flex flex-col">
+      <!-- 顶部：Logo + 导航 -->
+      <header
+        class="border-b border-slate-800/80 backdrop-blur bg-slate-950/40"
       >
         <div
-          class="flex items-start justify-between border-b border-slate-800 px-6 py-4"
+          class="max-w-7xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-4"
         >
           <div>
-            <h2 class="text-lg font-semibold text-cyan-300">检测详情</h2>
-            <p id="detail-time" class="mt-1 text-xs text-slate-500">—</p>
+            <h1
+              class="text-xl md:text-2xl font-bold tracking-wider bg-gradient-to-r from-cyan-300 via-sky-400 to-indigo-400 bg-clip-text text-transparent"
+            >
+              ODPlatform · 水下智能视觉中枢
+            </h1>
+            <p
+              class="mt-1 text-[11px] text-slate-500 tracking-[0.25em] uppercase"
+            >
+              Underwater Intelligent Vision Hub
+            </p>
           </div>
-          <button
-            id="detail-close"
-            type="button"
-            class="rounded-lg border border-slate-700 px-3 py-1 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
-          >
-            ✕ 关闭
-          </button>
+          <div class="flex items-center gap-3 text-xs">
+            <span
+              id="today-cost"
+              class="px-3 py-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-mono"
+            >
+              今日花费 ¥ 0.000000
+            </span>
+            <span class="flex items-center gap-2 text-emerald-400">
+              <span
+                class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"
+              ></span>
+              SYSTEM ONLINE
+            </span>
+          </div>
         </div>
 
-        <div class="grid gap-6 p-6 md:grid-cols-2">
-          <!-- 左侧：原图 + 结果图 -->
-          <div class="space-y-4">
-            <div>
-              <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
-                原图
-              </p>
-              <div
-                class="flex min-h-[160px] items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70"
+        <div class="max-w-7xl mx-auto px-6 pb-5">
+          <nav class="flex flex-wrap gap-2">
+            <button
+              v-for="tab in tabs"
+              :key="tab.key"
+              type="button"
+              @click="currentTab = tab.key"
+              class="rounded-lg border px-3.5 py-2 text-sm transition"
+              :class="
+                currentTab === tab.key
+                  ? 'bg-gradient-to-r from-cyan-500 to-indigo-500 text-slate-950 font-semibold border-transparent shadow-lg shadow-cyan-500/20'
+                  : 'bg-slate-900/70 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white'
+              "
+              v-text="tab.label"
+            ></button>
+          </nav>
+        </div>
+      </header>
+
+      <main class="max-w-7xl mx-auto w-full px-6 py-8 flex-1">
+        <!-- ==================== 1. 项目介绍 ==================== -->
+        <section v-if="currentTab === 'intro'" class="space-y-8">
+          <div
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-8 md:p-12 shadow-[0_0_60px_-20px_rgba(56,189,248,0.5)]"
+          >
+            <p class="text-xs tracking-[0.3em] text-cyan-400 uppercase">
+              Underwater AI Pipeline
+            </p>
+            <h2
+              class="mt-3 text-3xl md:text-4xl font-bold text-white leading-tight"
+            >
+              从数据到决策的<span
+                class="bg-gradient-to-r from-cyan-300 to-indigo-400 bg-clip-text text-transparent"
+                >水下视觉闭环平台</span
               >
-                <img
-                  id="detail-original"
-                  class="hidden max-h-[240px] w-auto object-contain"
-                  alt="原图"
-                />
-                <video
-                  id="detail-original-video"
-                  controls
-                  playsinline
-                  webkit-playsinline
-                  class="hidden max-h-[240px] w-auto object-contain"
-                ></video>
-                <span class="detail-empty text-sm text-slate-600">无原图</span>
+            </h2>
+            <p
+              class="mt-5 max-w-3xl text-sm md:text-base leading-relaxed text-slate-400"
+            >
+              ODPlatform 面向水下目标识别场景，打通「数据治理 → 模型训练 →
+              在线推理 → 多模态语义解释 → 成本度量」全链路。底层由 YOLO11s
+              完成高精度目标检测， 上层由 DeepSeek
+              大模型生成可读的水下场景分析，Django 提供推理与计费服务， Vue 3 +
+              ECharts 构建可视化控制台，形成可审计、可度量、可扩展的 AI 闭环。
+            </p>
+
+            <div class="mt-8 grid gap-4 sm:grid-cols-3">
+              <div
+                class="rounded-xl border border-slate-800 bg-slate-950/60 p-5"
+              >
+                <p class="text-2xl font-bold text-cyan-300">mAP50 89.7%</p>
+                <p class="mt-1 text-xs text-slate-500">best.pt 对应最佳轮次</p>
+              </div>
+              <div
+                class="rounded-xl border border-slate-800 bg-slate-950/60 p-5"
+              >
+                <p class="text-2xl font-bold text-indigo-300">D1–D7</p>
+                <p class="mt-1 text-xs text-slate-500">全流程数据血缘与审计</p>
+              </div>
+              <div
+                class="rounded-xl border border-slate-800 bg-slate-950/60 p-5"
+              >
+                <p class="text-2xl font-bold text-emerald-300">端到端</p>
+                <p class="mt-1 text-xs text-slate-500">图片 / 视频双模态推理</p>
               </div>
             </div>
-            <div>
-              <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
-                结果图
+
+            <div class="mt-8">
+              <p class="text-xs uppercase tracking-wider text-slate-500 mb-3">
+                技术栈
               </p>
-              <div
-                class="flex min-h-[160px] items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70"
-              >
-                <img
-                  id="detail-result"
-                  class="hidden max-h-[240px] w-auto object-contain"
-                  alt="结果图"
-                />
-                <video
-                  id="detail-result-video"
-                  controls
-                  playsinline
-                  webkit-playsinline
-                  class="hidden max-h-[240px] w-auto object-contain"
-                ></video>
-                <span class="detail-empty text-sm text-slate-600"
-                  >无结果图</span
+              <div class="flex flex-wrap gap-2 text-xs">
+                <span
+                  class="px-3 py-1.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
+                  >YOLO11s</span
+                >
+                <span
+                  class="px-3 py-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  >Django</span
+                >
+                <span
+                  class="px-3 py-1.5 rounded-full border border-green-500/40 bg-green-500/10 text-green-300"
+                  >Vue 3</span
+                >
+                <span
+                  class="px-3 py-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
+                  >DeepSeek</span
+                >
+                <span
+                  class="px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-300"
+                  >ECharts</span
+                >
+                <span
+                  class="px-3 py-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 text-sky-300"
+                  >TailwindCSS</span
+                >
+                <span
+                  class="px-3 py-1.5 rounded-full border border-slate-600 bg-slate-800/60 text-slate-300"
+                  >OpenCV</span
                 >
               </div>
             </div>
           </div>
 
-          <!-- 右侧：检测信息 + 解释 + 花费 -->
-          <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-3">
-              <div
-                class="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
-              >
-                <p class="text-xs text-slate-500">检测类别</p>
-                <p id="detail-classes" class="mt-1 text-sm text-cyan-300">—</p>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <h3 class="text-sm font-semibold text-cyan-300">闭环能力</h3>
+              <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+                数据集切分、身份核验、训练归档、推理产物与审计章一一对应，任何一次输出都可回溯到具体数据指纹与模型版本。
+              </p>
+            </div>
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <h3 class="text-sm font-semibold text-indigo-300">商业级度量</h3>
+              <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+                每次大模型调用都记录 Token
+                与预估花费，仪表盘实时汇总当日成本，让 AI 能力可计价、可运营。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 2. 数据理解 ==================== -->
+        <section v-if="currentTab === 'data'" class="space-y-8">
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <p class="text-xs text-slate-500">总图片数</p>
+              <p class="mt-2 text-3xl font-bold text-cyan-300">9,663</p>
+              <p class="mt-1 text-xs text-slate-500">
+                train 7,730 / val 966 / test 967 张（80/10/10 重划分）
+              </p>
+            </div>
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <p class="text-xs text-slate-500">目标类别</p>
+              <p class="mt-2 text-3xl font-bold text-indigo-300">24 类</p>
+              <p class="mt-1 text-xs text-slate-500">水下垃圾与潜水装备目标</p>
+            </div>
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <p class="text-xs text-slate-500">标注格式</p>
+              <p class="mt-2 text-3xl font-bold text-emerald-300">YOLO</p>
+              <p class="mt-1 text-xs text-slate-500">
+                train / valid / test 三段切分
+              </p>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+            <h3 class="text-sm font-semibold text-slate-200 mb-5">
+              类别数据占比（24 类）
+            </h3>
+            <div id="class-bars" class="grid gap-x-8 gap-y-3.5 sm:grid-cols-2">
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>鱼饵（Lure）</span><span>11.4% · 1,826 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-cyan-400 to-sky-500"
+                    style="width: 11.4%"
+                  ></div>
+                </div>
               </div>
-              <div
-                class="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
-              >
-                <p class="text-xs text-slate-500">置信度</p>
-                <p
-                  id="detail-confidence"
-                  class="mt-1 font-mono text-sm text-indigo-300"
-                >
-                  —
-                </p>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>汽车（Car）</span><span>10.7% · 1,708 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-indigo-400 to-violet-500"
+                    style="width: 10.7%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>剪刀（Scissors）</span><span>9.6% · 1,538 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                    style="width: 9.6%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>螺丝刀（Screwdriver）</span><span>9.3% · 1,482 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
+                    style="width: 9.3%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>杯子（Cup）</span><span>7.9% · 1,257 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-rose-400 to-pink-500"
+                    style="width: 7.9%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>呼吸管（Snorkel）</span><span>6.6% · 1,060 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-cyan-400 to-sky-500"
+                    style="width: 6.6%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>瓶子（Bottle）</span><span>5.4% · 861 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-indigo-400 to-violet-500"
+                    style="width: 5.4%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>塑料杯（Plastic Cup）</span><span>5.0% · 798 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                    style="width: 5%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>三脚架（Tripod）</span><span>5.0% · 795 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
+                    style="width: 5%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>护目镜（Goggles）</span><span>4.8% · 773 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-rose-400 to-pink-500"
+                    style="width: 4.8%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>餐叉（Fork）</span><span>4.8% · 771 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-cyan-400 to-sky-500"
+                    style="width: 4.8%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>脚蹼（Flipper）</span><span>4.4% · 708 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-indigo-400 to-violet-500"
+                    style="width: 4.4%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>勺子（Spoon）</span><span>4.1% · 658 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                    style="width: 4.1%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>刀具（Knife）</span><span>4.0% · 643 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
+                    style="width: 4%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>易拉罐（Soda Can）</span><span>2.3% · 360 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-rose-400 to-pink-500"
+                    style="width: 2.3%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>ROV 水下机器人（ROV）</span><span>1.7% · 272 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-cyan-400 to-sky-500"
+                    style="width: 1.7%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>LoCo 装备（LoCo）</span><span>0.8% · 135 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-indigo-400 to-violet-500"
+                    style="width: 0.8%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>配重块（Dive Weight）</span><span>0.6% · 97 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                    style="width: 0.6%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>Aqua 装备（Aqua）</span><span>0.6% · 95 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
+                    style="width: 0.6%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>箱体（Case）</span><span>0.4% · 70 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-rose-400 to-pink-500"
+                    style="width: 0.4%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>管道（Pipe）</span><span>0.2% · 35 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-cyan-400 to-sky-500"
+                    style="width: 0.2%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>塑料袋（Plastic Bag）</span><span>0.1% · 21 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-indigo-400 to-violet-500"
+                    style="width: 0.1%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>未知目标（Unknown Instance）</span
+                  ><span>0.1% · 13 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                    style="width: 0.1%"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>金属杆（Metal Rod）</span><span>0.0% · 0 个</span>
+                </div>
+                <div class="h-2 w-full rounded-full bg-slate-800">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
+                    style="width: 0%"
+                  ></div>
+                </div>
               </div>
             </div>
+            <p class="mt-5 text-xs text-slate-500">
+              数据来源：data/processed/dataset_new 的 YOLO 标签（train/val/test
+              共 15,976 个标注实例），按类别实例数统计。
+            </p>
+            <div
+              id="dataBarChart"
+              style="width: 100%; height: 400px; margin-top: 20px"
+            ></div>
+          </div>
+        </section>
 
-            <div>
-              <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
-                大模型解释
+        <!-- ==================== 3. 模型训练 ==================== -->
+        <section v-if="currentTab === 'train'" class="space-y-8">
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <p class="text-xs text-slate-500">mAP50</p>
+              <p class="mt-2 text-3xl font-bold text-cyan-300">89.7%</p>
+              <p class="mt-1 text-[11px] text-slate-500">
+                最佳权重（末轮 86.2%）
               </p>
-              <div
-                id="detail-explanation"
-                class="min-h-[140px] whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-relaxed text-slate-300"
+            </div>
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <p class="text-xs text-slate-500">训练轮数</p>
+              <p class="mt-2 text-3xl font-bold text-indigo-300">100</p>
+            </div>
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <p class="text-xs text-slate-500">模型架构</p>
+              <p class="mt-2 text-3xl font-bold text-emerald-300">yolo11s</p>
+            </div>
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+            >
+              <p class="text-xs text-slate-500">训练数据集</p>
+              <p class="mt-2 text-3xl font-bold text-amber-300">dataset_new</p>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+            <h3 class="text-sm font-semibold text-slate-200 mb-4">训练曲线</h3>
+            <img
+              src="/static/training_results.png"
+              alt="训练曲线"
+              class="w-full rounded-xl border border-slate-800 bg-slate-950/70"
+              onerror="
+                this.style.display = 'none';
+                var el = document.getElementById('train-chart-fallback');
+                if (el) {
+                  el.classList.remove('hidden');
+                  el.classList.add('flex');
+                }
+              "
+            />
+            <div
+              id="train-chart-fallback"
+              class="hidden min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-950/70 text-center"
+            >
+              <p class="text-3xl">📈</p>
+              <p class="mt-3 text-sm text-slate-300">训练曲线占位图</p>
+              <p class="mt-1 text-xs text-slate-500">
+                真实训练曲线取自 runs/training/20261026-091721/results.png
+              </p>
+            </div>
+            <p class="mt-4 text-xs text-slate-500">
+              训练产物：train-20261026-091721-dataset_new-yolo11s-best.pt（100
+              轮，mAP50 最佳 89.7% / 末轮 86.2%，数据取自
+              runs/training/20261026-091721/results.csv）
+            </p>
+          </div>
+        </section>
+
+        <!-- ==================== 4. 模型推理 ==================== -->
+        <section
+          v-if="currentTab === 'infer'"
+          class="grid gap-8 lg:grid-cols-2"
+        >
+          <!-- 上传表单 -->
+          <div
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6 shadow-[0_0_40px_-15px_rgba(56,189,248,0.6)]"
+          >
+            <h2
+              class="text-lg font-semibold text-cyan-300 mb-4 flex items-center gap-2"
+            >
+              <span class="w-1.5 h-5 bg-cyan-400 rounded-full"></span>图像 /
+              视频推理任务
+            </h2>
+
+            <form
+              id="infer-form"
+              method="post"
+              action="{% url 'api_infer' %}"
+              enctype="multipart/form-data"
+              class="space-y-4"
+            >
+              {% csrf_token %}
+              <label for="image" class="block text-sm text-slate-400"
+                >选择待检测图片或视频</label
               >
-                加载中…
+              <input
+                id="image"
+                name="image"
+                type="file"
+                accept="image/*,video/*"
+                required
+                class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 border border-slate-700 rounded-lg bg-slate-950/60 px-3 py-2"
+              />
+
+              <div
+                class="space-y-2 rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-3"
+              >
+                <div class="flex items-center justify-between text-sm">
+                  <label for="conf-slider" class="text-slate-400"
+                    >置信度阈值</label
+                  >
+                  <span id="conf-value" class="font-mono text-cyan-300"
+                    >0.25</span
+                  >
+                </div>
+                <input
+                  id="conf-slider"
+                  name="conf"
+                  type="range"
+                  min="0.05"
+                  max="0.9"
+                  step="0.05"
+                  value="0.25"
+                  class="w-full cursor-pointer accent-cyan-400"
+                />
+                <p class="text-[11px] text-slate-500">
+                  阈值越高越严格；调完后可直接再次点击“开始推理”，无需重新选择文件。
+                </p>
               </div>
+
+              <button
+                id="run-btn"
+                type="submit"
+                class="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-500 px-4 py-3 font-semibold text-slate-950 tracking-wide hover:from-cyan-400 hover:to-indigo-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                开始推理
+              </button>
+            </form>
+
+            <div class="mt-6 text-xs text-slate-500 space-y-1">
+              <p>
+                状态：<span id="status" class="text-slate-300"
+                  >等待任务提交…</span
+                >
+              </p>
+              <p>检测类别：<span id="classes" class="text-cyan-300">—</span></p>
+            </div>
+          </div>
+
+          <!-- 结果预览 + 智能解释 -->
+          <div
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6"
+          >
+            <h2
+              class="text-lg font-semibold text-indigo-300 mb-4 flex items-center gap-2"
+            >
+              <span class="w-1.5 h-5 bg-indigo-400 rounded-full"></span>推理结果
+            </h2>
+
+            <div
+              class="rounded-xl border border-slate-800 bg-slate-950/70 flex items-center justify-center min-h-[240px] overflow-hidden"
+            >
+              <img
+                id="preview"
+                src=""
+                alt="结果预览"
+                class="hidden max-h-[320px] w-auto object-contain"
+              />
+              <video
+                id="preview-video"
+                controls
+                playsinline
+                webkit-playsinline
+                class="hidden max-h-[320px] w-auto object-contain"
+              ></video>
+              <div
+                id="video-fallback"
+                class="hidden w-full flex-col items-center gap-3 px-6 py-8 text-center"
+              >
+                <p class="text-sm text-amber-300">
+                  ⚠️ 当前浏览器不支持直接播放该视频编码，请点击下载查看。
+                </p>
+                <a
+                  id="video-download"
+                  href="#"
+                  download
+                  class="rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-400 transition"
+                  >⬇ 下载视频</a
+                >
+              </div>
+              <span id="preview-tip" class="text-slate-600 text-sm"
+                >暂无预览图</span
+              >
+            </div>
+
+            <h3 class="mt-6 text-sm font-semibold text-slate-300">智能解释</h3>
+            <div
+              id="explanation"
+              class="mt-2 rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-relaxed text-slate-400 min-h-[96px]"
+            >
+              等待模型返回解释…
             </div>
 
             <div
-              class="flex items-center justify-between rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-4"
+              id="cost-box"
+              class="mt-4 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-4 flex items-center justify-between shadow-[0_0_30px_-12px_rgba(251,191,36,0.8)]"
             >
-              <span class="text-sm text-amber-200">💳 本次花费</span>
-              <span class="font-mono text-amber-300">
-                <span id="detail-cost">¥ 0.000000</span>
-                <span id="detail-tokens" class="ml-3 text-xs text-amber-200/70"
-                  >0 tokens</span
-                >
+              <span class="text-sm font-medium text-amber-200"
+                >💳 本次分析预估花费</span
+              >
+              <span class="font-mono text-lg font-bold text-amber-300">
+                ¥ <span id="cost-value">0.000000</span> 元
               </span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 5. 仪表盘大屏 ==================== -->
+        <section v-if="currentTab === 'dashboard'" class="space-y-8">
+          <!-- KPI -->
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div
+              class="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/15 to-slate-900/40 p-5"
+            >
+              <p class="text-xs text-cyan-200">累计推理数</p>
+              <p
+                id="kpi-count"
+                class="mt-2 font-mono text-3xl font-bold text-cyan-300"
+              >
+                —
+              </p>
+            </div>
+            <div
+              class="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-500/15 to-slate-900/40 p-5"
+            >
+              <p class="text-xs text-indigo-200">今日消耗 Token</p>
+              <p
+                id="kpi-tokens"
+                class="mt-2 font-mono text-3xl font-bold text-indigo-300"
+              >
+                0
+              </p>
+            </div>
+            <div
+              class="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-slate-900/40 p-5"
+            >
+              <p class="text-xs text-amber-200">今日预估花费</p>
+              <p
+                id="kpi-cost"
+                class="mt-2 font-mono text-3xl font-bold text-amber-300"
+              >
+                ¥ 0.000000
+              </p>
+            </div>
+            <div
+              class="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 to-slate-900/40 p-5"
+            >
+              <p class="text-xs text-emerald-200">当前模型</p>
+              <p id="kpi-model" class="mt-2 text-xl font-bold text-emerald-300">
+                yolo11s · 24 类
+              </p>
+            </div>
+          </div>
+
+          <!-- 图表 -->
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
+            >
+              <h3 class="text-sm font-semibold text-slate-200 mb-2">
+                最近 7 天推理量趋势
+              </h3>
+              <div id="trendChart" style="height: 300px"></div>
+            </div>
+            <div
+              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
+            >
+              <h3 class="text-sm font-semibold text-slate-200 mb-1">
+                数据集类别分布
+              </h3>
+              <p class="mb-2 text-[11px] text-slate-500">
+                dataset_new 标注实例 15,976 个（训练集分布，非在线推理结果）
+              </p>
+              <div class="flex items-center gap-3">
+                <div id="pieChart" class="flex-1" style="height: 300px"></div>
+                <div
+                  id="pie-legend"
+                  class="w-48 shrink-0 max-h-[300px] overflow-y-auto pr-1 space-y-1 text-[10px] leading-4 text-slate-400"
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 历史记录 -->
+          <div
+            class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6"
+          >
+            <div
+              class="flex flex-wrap items-baseline justify-between gap-2 mb-4"
+            >
+              <h3
+                class="text-lg font-semibold text-cyan-300 flex items-center gap-2"
+              >
+                <span class="w-1.5 h-5 bg-cyan-400 rounded-full"></span>推理记录
+              </h3>
+              <span class="text-xs text-slate-500">
+                统计日期：<span id="billing-date">—</span>
+              </span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left">
+                <thead
+                  class="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500"
+                >
+                  <tr>
+                    <th class="py-3 px-3 font-medium">时间</th>
+                    <th class="py-3 px-3 font-medium">目标</th>
+                    <th class="py-3 px-3 font-medium">置信度</th>
+                    <th class="py-3 px-3 font-medium">花费</th>
+                    <th class="py-3 px-3 font-medium text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="history-body"
+                  class="divide-y divide-slate-800/80 text-slate-300"
+                >
+                  <tr>
+                    <td colspan="5" class="py-6 text-center text-slate-600">
+                      加载中…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer
+        class="border-t border-slate-800/80 py-6 text-center text-xs text-slate-600"
+      >
+        ODPlatform · YOLO + LLM + Django + Vue 3 水下视觉闭环演示
+      </footer>
+
+      <!-- 详情弹窗（不在 v-if 内，切换模块不受影响） -->
+      <div
+        id="detail-modal"
+        class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4"
+      >
+        <div
+          class="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+        >
+          <div
+            class="flex items-start justify-between border-b border-slate-800 px-6 py-4"
+          >
+            <div>
+              <h2 class="text-lg font-semibold text-cyan-300">检测详情</h2>
+              <p id="detail-time" class="mt-1 text-xs text-slate-500">—</p>
+            </div>
+            <button
+              id="detail-close"
+              type="button"
+              class="rounded-lg border border-slate-700 px-3 py-1 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+            >
+              ✕ 关闭
+            </button>
+          </div>
+
+          <div class="grid gap-6 p-6 md:grid-cols-2">
+            <div class="space-y-4">
+              <div>
+                <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
+                  原图
+                </p>
+                <div
+                  class="flex min-h-[160px] items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70"
+                >
+                  <img
+                    id="detail-original"
+                    class="hidden max-h-[240px] w-auto object-contain"
+                    alt="原图"
+                  />
+                  <video
+                    id="detail-original-video"
+                    controls
+                    playsinline
+                    webkit-playsinline
+                    class="hidden max-h-[240px] w-auto object-contain"
+                  ></video>
+                  <span class="detail-empty text-sm text-slate-600"
+                    >无原图</span
+                  >
+                </div>
+              </div>
+              <div>
+                <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
+                  结果图
+                </p>
+                <div
+                  class="flex min-h-[160px] items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70"
+                >
+                  <img
+                    id="detail-result"
+                    class="hidden max-h-[240px] w-auto object-contain"
+                    alt="结果图"
+                  />
+                  <video
+                    id="detail-result-video"
+                    controls
+                    playsinline
+                    webkit-playsinline
+                    class="hidden max-h-[240px] w-auto object-contain"
+                  ></video>
+                  <span class="detail-empty text-sm text-slate-600"
+                    >无结果图</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div class="grid grid-cols-2 gap-3">
+                <div
+                  class="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+                >
+                  <p class="text-xs text-slate-500">检测类别</p>
+                  <p id="detail-classes" class="mt-1 text-sm text-cyan-300">
+                    —
+                  </p>
+                </div>
+                <div
+                  class="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+                >
+                  <p class="text-xs text-slate-500">置信度</p>
+                  <p
+                    id="detail-confidence"
+                    class="mt-1 font-mono text-sm text-indigo-300"
+                  >
+                    —
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
+                  大模型解释
+                </p>
+                <div
+                  id="detail-explanation"
+                  class="min-h-[140px] whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-relaxed text-slate-300"
+                >
+                  加载中…
+                </div>
+              </div>
+
+              <div
+                class="flex items-center justify-between rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-4"
+              >
+                <span class="text-sm text-amber-200">💳 本次花费</span>
+                <span class="font-mono text-amber-300">
+                  <span id="detail-cost">¥ 0.000000</span>
+                  <span
+                    id="detail-tokens"
+                    class="ml-3 text-xs text-amber-200/70"
+                    >0 tokens</span
+                  >
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -409,126 +988,164 @@
     </div>
 
     <script>
-      const form = document.getElementById("infer-form");
-      const runBtn = document.getElementById("run-btn");
-      const statusEl = document.getElementById("status");
-      const classesEl = document.getElementById("classes");
-      const previewEl = document.getElementById("preview");
-      const previewVideo = document.getElementById("preview-video");
-      const previewTip = document.getElementById("preview-tip");
-      const explanationEl = document.getElementById("explanation");
-      const costValueEl = document.getElementById("cost-value");
-      const todayCostEl = document.getElementById("today-cost");
-      const csrfToken = form.querySelector(
-        "input[name='csrfmiddlewaretoken']",
-      ).value;
-      const historyBody = document.getElementById("history-body");
-      const billingCostEl = document.getElementById("billing-cost");
-      const billingTokensEl = document.getElementById("billing-tokens");
-      const billingDateEl = document.getElementById("billing-date");
+      // ===== 原生 JS：推理 / 历史 / 详情弹窗 =====
+      // 模块由 Vue 的 v-if 控制，DOM 会被销毁重建，因此所有元素都按需查询，
+      // 事件统一委托到 document 上，保证切换模块后依然可用。
+      const $ = (id) => document.getElementById(id);
+      const csrfToken = "{{ csrf_token }}";
+      const VIDEO_PATTERN = /\.(mp4|avi|mov|mkv|webm|m4v|flv)$/i;
+      let currentRecordId = null;
 
-      // 读取历史记录 + 今日花费/Token 汇总（区域 B、C 与顶部徽标共用一份数据）
+      function setText(id, text) {
+        const el = $(id);
+        if (el) el.textContent = text;
+      }
+
+      function isVideoFile(file) {
+        return (
+          !!file &&
+          (file.type.startsWith("video/") || VIDEO_PATTERN.test(file.name))
+        );
+      }
+
+      function resetVideoPreview() {
+        const video = $("preview-video");
+        const fallback = $("video-fallback");
+        if (video) {
+          video.onerror = null;
+          video.pause();
+          video.removeAttribute("src");
+          video.classList.add("hidden");
+        }
+        if (fallback) {
+          fallback.classList.add("hidden");
+          fallback.classList.remove("flex");
+        }
+      }
+
+      function showVideoFallback(src) {
+        const video = $("preview-video");
+        const fallback = $("video-fallback");
+        const download = $("video-download");
+        if (video) {
+          video.onerror = null;
+          video.pause();
+          video.removeAttribute("src");
+          video.classList.add("hidden");
+        }
+        if (fallback) {
+          fallback.classList.remove("hidden");
+          fallback.classList.add("flex");
+        }
+        if (download) {
+          download.href = src;
+          download.setAttribute(
+            "download",
+            decodeURIComponent(src.split("/").pop() || "result.mp4"),
+          );
+        }
+      }
+
+      function showVideo(src) {
+        resetVideoPreview();
+        const img = $("preview");
+        const video = $("preview-video");
+        if (img) {
+          img.classList.add("hidden");
+          img.removeAttribute("src");
+        }
+        if (!video) return;
+        video.onerror = () => showVideoFallback(src);
+        video.src = src;
+        video.classList.remove("hidden");
+      }
+
+      function showImage(src) {
+        resetVideoPreview();
+        const img = $("preview");
+        if (!img) return;
+        img.src = src;
+        img.classList.remove("hidden");
+      }
+
+      // 历史记录 + KPI + 今日花费（仪表盘未挂载时只更新顶部徽标）
       async function refreshHistory() {
         try {
           const resp = await fetch("{% url 'api_history' %}");
           const data = await resp.json();
           const rows = data.records || [];
-
-          historyBody.innerHTML = "";
-          if (!rows.length) {
-            const tr = document.createElement("tr");
-            const td = document.createElement("td");
-            td.colSpan = 5;
-            td.className = "py-6 text-center text-slate-600";
-            td.textContent = "暂无推理记录";
-            tr.appendChild(td);
-            historyBody.appendChild(tr);
-          }
-          rows.forEach((row) => {
-            const tr = document.createElement("tr");
-            const cells = [
-              row.time,
-              row.classes,
-              Number(row.confidence || 0).toFixed(3),
-              `¥ ${Number(row.cost || 0).toFixed(6)}`,
-            ];
-            cells.forEach((text) => {
-              const td = document.createElement("td");
-              td.className = "py-3 px-3";
-              td.textContent = text;
-              tr.appendChild(td);
-            });
-
-            // 操作列：查看详情
-            const actionTd = document.createElement("td");
-            actionTd.className = "py-3 px-3 text-right";
-            const detailBtn = document.createElement("button");
-            detailBtn.type = "button";
-            detailBtn.className =
-              "detail-btn rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/20 transition";
-            detailBtn.dataset.id = row.id;
-            detailBtn.textContent = "🔍 查看详情";
-            actionTd.appendChild(detailBtn);
-            tr.appendChild(actionTd);
-
-            historyBody.appendChild(tr);
-          });
-
           const today = data.today || {};
           const totalCost = Number(today.total_cost || 0);
-          billingCostEl.textContent = `¥ ${totalCost.toFixed(6)}`;
-          billingTokensEl.textContent = Number(
-            today.total_tokens || 0,
-          ).toLocaleString();
-          billingDateEl.textContent = today.date || "—";
-          todayCostEl.textContent = `今日花费 ¥ ${totalCost.toFixed(6)}`;
+          const totalTokens = Number(today.total_tokens || 0);
+
+          const historyBody = $("history-body");
+          if (historyBody) {
+            historyBody.innerHTML = "";
+            if (!rows.length) {
+              const tr = document.createElement("tr");
+              const td = document.createElement("td");
+              td.colSpan = 5;
+              td.className = "py-6 text-center text-slate-600";
+              td.textContent = "暂无推理记录";
+              tr.appendChild(td);
+              historyBody.appendChild(tr);
+            }
+            rows.forEach((row) => {
+              const tr = document.createElement("tr");
+              [
+                row.time,
+                row.classes,
+                Number(row.confidence || 0).toFixed(3),
+                `¥ ${Number(row.cost || 0).toFixed(6)}`,
+              ].forEach((text) => {
+                const td = document.createElement("td");
+                td.className = "py-3 px-3";
+                td.textContent = text;
+                tr.appendChild(td);
+              });
+              const actionTd = document.createElement("td");
+              actionTd.className = "py-3 px-3 text-right";
+              const detailBtn = document.createElement("button");
+              detailBtn.type = "button";
+              detailBtn.className =
+                "detail-btn rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/20 transition";
+              detailBtn.dataset.id = row.id;
+              detailBtn.textContent = "🔍 查看详情";
+              actionTd.appendChild(detailBtn);
+              tr.appendChild(actionTd);
+              historyBody.appendChild(tr);
+            });
+          }
+
+          setText("kpi-cost", `¥ ${totalCost.toFixed(6)}`);
+          setText("kpi-tokens", totalTokens.toLocaleString());
+          setText("today-cost", `今日花费 ¥ ${totalCost.toFixed(6)}`);
+          if ($("billing-date")) setText("billing-date", today.date || "—");
+          if ($("kpi-count")) {
+            setText(
+              "kpi-count",
+              Number(data.total_count ?? rows.length).toLocaleString(),
+            );
+          }
         } catch (error) {
           console.warn("读取历史记录失败", error);
         }
       }
-      refreshHistory();
 
-      // 顶部三个按钮切换面板显隐（默认只显示推理面板）
-      const tabButtons = document.querySelectorAll(".tab-btn");
-      tabButtons.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const target = btn.dataset.panel;
-          tabButtons.forEach((item) => {
-            document.getElementById(item.dataset.panel).classList.add("hidden");
-            item.classList.toggle("tab-active", item === btn);
-          });
-          document.getElementById(target).classList.remove("hidden");
-          refreshHistory();
-        });
-      });
-
-      // 详情弹窗：点击“查看详情”后请求 /api/record/<id>/ 并填充
-      const detailModal = document.getElementById("detail-modal");
-      const detailUrl = "{% url 'api_record_detail' record_id=0 %}";
-      const detailTimeEl = document.getElementById("detail-time");
-      const detailClassesEl = document.getElementById("detail-classes");
-      const detailConfidenceEl = document.getElementById("detail-confidence");
-      const detailExplanationEl = document.getElementById("detail-explanation");
-      const detailCostEl = document.getElementById("detail-cost");
-      const detailTokensEl = document.getElementById("detail-tokens");
-      const detailOriginalImg = document.getElementById("detail-original");
-      const detailOriginalVideo = document.getElementById(
-        "detail-original-video",
-      );
-      const detailResultImg = document.getElementById("detail-result");
-      const detailResultVideo = document.getElementById("detail-result-video");
-
-      // 图片 / 视频共用一套展示逻辑（视频记录的结果是 mp4）
+      // 详情弹窗
       function setDetailMedia(imgEl, videoEl, url, emptyText) {
+        if (!imgEl || !videoEl) return;
         const emptyEl = imgEl.parentElement.querySelector(".detail-empty");
         imgEl.classList.add("hidden");
         videoEl.classList.add("hidden");
         imgEl.removeAttribute("src");
         videoEl.removeAttribute("src");
-        emptyEl.classList.add("hidden");
+        if (emptyEl) emptyEl.classList.add("hidden");
         if (!url) {
-          emptyEl.textContent = emptyText;
-          emptyEl.classList.remove("hidden");
+          if (emptyEl) {
+            emptyEl.textContent = emptyText;
+            emptyEl.classList.remove("hidden");
+          }
           return;
         }
         if (VIDEO_PATTERN.test(url)) {
@@ -541,143 +1158,123 @@
       }
 
       async function openRecordDetail(recordId) {
-        detailModal.classList.remove("hidden");
-        detailModal.style.display = "flex";
-        detailExplanationEl.textContent = "加载中…";
+        const modal = $("detail-modal");
+        if (!modal) return;
+        modal.classList.remove("hidden");
+        modal.style.display = "flex";
+        setText("detail-explanation", "加载中…");
         try {
-          const resp = await fetch(detailUrl.replace("/0/", `/${recordId}/`));
+          const template = "{% url 'api_record_detail' record_id=0 %}";
+          const resp = await fetch(template.replace("/0/", `/${recordId}/`));
           const data = await resp.json();
-          if (data.status !== "success") {
+          if (data.status !== "success")
             throw new Error(data.message || "加载失败");
-          }
-          detailTimeEl.textContent = data.created_at || "—";
-          detailClassesEl.textContent = data.detected_classes || "—";
-          detailConfidenceEl.textContent = Number(data.confidence || 0).toFixed(
-            3,
+          setText("detail-time", data.created_at || "—");
+          setText("detail-classes", data.detected_classes || "—");
+          setText("detail-confidence", Number(data.confidence || 0).toFixed(3));
+          setText(
+            "detail-explanation",
+            data.llm_explanation || "该记录暂无大模型解释",
           );
-          detailExplanationEl.textContent =
-            data.llm_explanation || "该记录暂无大模型解释";
-          detailCostEl.textContent = `¥ ${Number(data.llm_cost || 0).toFixed(6)}`;
-          detailTokensEl.textContent = `${Number(
-            data.total_tokens || 0,
-          ).toLocaleString()} tokens`;
+          setText("detail-cost", `¥ ${Number(data.llm_cost || 0).toFixed(6)}`);
+          setText(
+            "detail-tokens",
+            `${Number(data.total_tokens || 0).toLocaleString()} tokens`,
+          );
           setDetailMedia(
-            detailOriginalImg,
-            detailOriginalVideo,
+            $("detail-original"),
+            $("detail-original-video"),
             data.original_img,
             "无原图",
           );
           setDetailMedia(
-            detailResultImg,
-            detailResultVideo,
+            $("detail-result"),
+            $("detail-result-video"),
             data.result_img,
             "无结果图",
           );
         } catch (error) {
-          detailExplanationEl.textContent = "加载失败：" + error.message;
+          setText("detail-explanation", "加载失败：" + error.message);
         }
       }
 
       function closeRecordDetail() {
-        [detailOriginalVideo, detailResultVideo].forEach((video) => {
-          video.pause();
-          video.removeAttribute("src");
+        ["detail-original-video", "detail-result-video"].forEach((id) => {
+          const video = $(id);
+          if (video) {
+            video.pause();
+            video.removeAttribute("src");
+          }
         });
-        detailModal.style.display = "none";
-        detailModal.classList.add("hidden");
+        const modal = $("detail-modal");
+        if (modal) {
+          modal.style.display = "none";
+          modal.classList.add("hidden");
+        }
       }
 
-      historyBody.addEventListener("click", (event) => {
-        const btn = event.target.closest(".detail-btn");
-        if (btn) openRecordDetail(btn.dataset.id);
-      });
-      document
-        .getElementById("detail-close")
-        .addEventListener("click", closeRecordDetail);
-      detailModal.addEventListener("click", (event) => {
-        if (event.target === detailModal) closeRecordDetail();
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && detailModal.style.display === "flex") {
-          closeRecordDetail();
+      // 事件委托：v-if 重建 DOM 后监听依然有效
+      document.addEventListener("change", (event) => {
+        if (event.target && event.target.id === "image") {
+          const file = event.target.files[0];
+          if (!file) return;
+          const objectUrl = URL.createObjectURL(file);
+          if (isVideoFile(file)) showVideo(objectUrl);
+          else showImage(objectUrl);
+          const tip = $("preview-tip");
+          if (tip) tip.classList.add("hidden");
         }
       });
 
-      // 当前这次推理对应的数据库记录 id，保证解释能精确写回同一条记录
-      let currentRecordId = null;
-      const VIDEO_PATTERN = /\.(mp4|avi|mov|mkv|webm|m4v|flv)$/i;
-
-      function isVideoFile(file) {
-        return (
-          !!file &&
-          (file.type.startsWith("video/") || VIDEO_PATTERN.test(file.name))
-        );
-      }
-
-      function showVideo(src) {
-        previewEl.classList.add("hidden");
-        previewEl.removeAttribute("src");
-        previewVideo.src = src;
-        previewVideo.classList.remove("hidden");
-      }
-
-      function showImage(src) {
-        previewVideo.classList.add("hidden");
-        previewVideo.removeAttribute("src");
-        previewEl.src = src;
-        previewEl.classList.remove("hidden");
-      }
-
-      // 选择文件后本地预览（图片走 <img>，视频走 <video>）
-      form.image.addEventListener("change", () => {
-        const file = form.image.files[0];
-        if (!file) return;
-        const objectUrl = URL.createObjectURL(file);
-        if (isVideoFile(file)) {
-          showVideo(objectUrl);
-        } else {
-          showImage(objectUrl);
+      document.addEventListener("input", (event) => {
+        if (event.target && event.target.id === "conf-slider") {
+          setText("conf-value", Number(event.target.value).toFixed(2));
         }
-        previewTip.classList.add("hidden");
       });
 
-      form.addEventListener("submit", async (event) => {
+      document.addEventListener("submit", async (event) => {
+        const form = event.target;
+        if (!form || form.id !== "infer-form") return;
         event.preventDefault();
-        const videoTask = isVideoFile(form.image.files[0]);
-        runBtn.disabled = true;
-        runBtn.textContent = videoTask ? "视频处理中…" : "推理中…";
-        statusEl.textContent = videoTask
-          ? "正在处理视频，请稍候…（耗时随视频时长增加，请勿关闭页面）"
-          : "正在提交图片并推理…";
-        explanationEl.textContent = "等待模型返回解释…";
-        costValueEl.textContent = "0.000000";
+
+        const fileInput = $("image");
+        const videoTask = isVideoFile(fileInput && fileInput.files[0]);
+        const runBtn = $("run-btn");
+        if (runBtn) {
+          runBtn.disabled = true;
+          runBtn.textContent = videoTask ? "视频处理中…" : "推理中…";
+        }
+        setText(
+          "status",
+          videoTask
+            ? "正在处理视频，请稍候…（耗时随视频时长增加，请勿关闭页面）"
+            : "正在提交图片并推理…",
+        );
+        setText("explanation", "等待模型返回解释…");
+        setText("cost-value", "0.000000");
 
         try {
-          // 1. 上传图片/视频，调用推理接口
           const formData = new FormData(form);
+          const confValue = $("conf-slider") ? $("conf-slider").value : "0.25";
+          formData.set("conf", confValue);
           const inferResp = await fetch("{% url 'api_infer' %}", {
             method: "POST",
             headers: { "X-CSRFToken": csrfToken },
             body: formData,
           });
           const inferData = await inferResp.json();
-
           if (inferData.status !== "success") {
             throw new Error(inferData.message || "推理失败");
           }
 
-          // 2. 更新结果预览与类别
           currentRecordId = inferData.record_id;
-          if (inferData.result_video_url) {
-            showVideo(inferData.result_video_url);
-          } else {
-            showImage(inferData.result_img_url);
-          }
-          previewTip.classList.add("hidden");
-          classesEl.textContent = inferData.classes || "—";
-          statusEl.textContent = "推理完成，正在生成解释…";
+          if (inferData.result_video_url) showVideo(inferData.result_video_url);
+          else showImage(inferData.result_img_url);
+          const tip = $("preview-tip");
+          if (tip) tip.classList.add("hidden");
+          setText("classes", inferData.classes || "—");
+          setText("status", "推理完成，正在生成解释…");
 
-          // 3. 调用解释接口（带上 record_id，严格一一对应）
           const explainResp = await fetch("{% url 'api_explain' %}", {
             method: "POST",
             headers: {
@@ -688,30 +1285,352 @@
               classes: inferData.classes,
               class_counts: inferData.class_counts,
               record_id: currentRecordId,
+              conf_threshold: inferData.conf_threshold,
             }),
           });
           const explainData = await explainResp.json();
-          explanationEl.textContent =
-            explainData.explanation || explainData.message || "暂无解释";
-          costValueEl.textContent = Number(explainData.cost || 0).toFixed(6);
+          setText(
+            "explanation",
+            explainData.explanation || explainData.message || "暂无解释",
+          );
+          setText("cost-value", Number(explainData.cost || 0).toFixed(6));
           refreshHistory();
-          if (explainData.status === "success") {
-            statusEl.textContent =
-              "任务完成" +
-              (inferData.infer_time
-                ? `（推理耗时 ${inferData.infer_time} 秒）`
-                : "");
-          } else {
-            statusEl.textContent = "推理完成，但解释生成失败";
-          }
+          setText(
+            "status",
+            explainData.status === "success"
+              ? "任务完成" +
+                  (inferData.infer_time
+                    ? `（推理耗时 ${inferData.infer_time} 秒）`
+                    : "")
+              : "推理完成，但解释生成失败",
+          );
         } catch (error) {
-          statusEl.textContent = "任务失败：" + error.message;
-          explanationEl.textContent = "请检查服务端日志后重试。";
+          setText("status", "任务失败：" + error.message);
+          setText("explanation", "请检查服务端日志后重试。");
         } finally {
-          runBtn.disabled = false;
-          runBtn.textContent = "开始推理";
+          const btn = $("run-btn");
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "开始推理";
+          }
         }
       });
+
+      document.addEventListener("click", (event) => {
+        const btn = event.target.closest && event.target.closest(".detail-btn");
+        if (btn) openRecordDetail(btn.dataset.id);
+      });
+      document.addEventListener("click", (event) => {
+        if (event.target.id === "detail-close") closeRecordDetail();
+        const modal = $("detail-modal");
+        if (modal && event.target === modal) closeRecordDetail();
+      });
+      document.addEventListener("keydown", (event) => {
+        const modal = $("detail-modal");
+        if (event.key === "Escape" && modal && modal.style.display === "flex") {
+          closeRecordDetail();
+        }
+      });
+
+      refreshHistory();
+    </script>
+
+    <script>
+      // ===== 仪表盘 ECharts：等 v-if 的 DOM 真正显示后再渲染 =====
+      const PIE_COLORS = [
+        "#22d3ee",
+        "#38bdf8",
+        "#0ea5e9",
+        "#6366f1",
+        "#818cf8",
+        "#a78bfa",
+        "#c084fc",
+        "#e879f9",
+        "#f472b6",
+        "#fb7185",
+        "#f97316",
+        "#f59e0b",
+        "#facc15",
+        "#a3e635",
+        "#34d399",
+        "#10b981",
+        "#14b8a6",
+        "#2dd4bf",
+        "#60a5fa",
+        "#93c5fd",
+        "#cbd5e1",
+        "#94a3b8",
+        "#64748b",
+        "#475569",
+      ];
+      const PIE_DATA = [
+        { value: 1826, name: "拟饵（Lure）" },
+        { value: 1708, name: "汽车（Car）" },
+        { value: 1538, name: "剪刀（Scissors）" },
+        { value: 1482, name: "螺丝刀（Screwdriver）" },
+        { value: 1257, name: "杯子（Cup）" },
+        { value: 1060, name: "呼吸管（Snorkel）" },
+        { value: 861, name: "瓶子（Bottle）" },
+        { value: 798, name: "塑料杯（Plastic Cup）" },
+        { value: 795, name: "三脚架（Tripod）" },
+        { value: 773, name: "护目镜（Goggles）" },
+        { value: 771, name: "餐叉（Fork）" },
+        { value: 708, name: "脚蹼（Flipper）" },
+        { value: 658, name: "勺子（Spoon）" },
+        { value: 643, name: "刀具（Knife）" },
+        { value: 360, name: "易拉罐（Soda Can）" },
+        { value: 272, name: "ROV 水下机器人（ROV）" },
+        { value: 135, name: "LoCo 装备（LoCo）" },
+        { value: 97, name: "配重块（Dive Weight）" },
+        { value: 95, name: "Aqua 装备（Aqua）" },
+        { value: 70, name: "箱体（Case）" },
+        { value: 35, name: "管道（Pipe）" },
+        { value: 21, name: "塑料袋（Plastic Bag）" },
+        { value: 13, name: "未知目标（Unknown Instance）" },
+        { value: 0, name: "金属杆（Metal Rod）" },
+      ];
+
+      let trendChart = null;
+      let pieChart = null;
+      let dataBarChart = null;
+      let trendDates = [];
+      let trendCounts = [];
+
+      // 数据理解柱状图：直接解析进度条 DOM 里的类别与数量，保证两份数据一致
+      function initDataBarChart() {
+        const chartEl = $("dataBarChart");
+        const barsEl = $("class-bars");
+        if (!chartEl || !barsEl || typeof echarts === "undefined") return;
+        const items = Array.from(barsEl.children)
+          .map((row) => {
+            const spans = row.querySelectorAll("span");
+            const name = spans[0] ? spans[0].textContent.trim() : "";
+            const match = spans[1]
+              ? spans[1].textContent.match(/([\d,]+)\s*个/)
+              : null;
+            const count = match ? Number(match[1].replace(/,/g, "")) : 0;
+            return { name, count };
+          })
+          .filter((item) => item.name);
+        if (!items.length) return;
+        const existing = echarts.getInstanceByDom(chartEl);
+        if (existing) existing.dispose();
+        dataBarChart = echarts.init(chartEl);
+        dataBarChart.setOption({
+          backgroundColor: "transparent",
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            borderColor: "#334155",
+            textStyle: { color: "#e2e8f0", fontSize: 12 },
+            valueFormatter: (value) =>
+              `${Number(value).toLocaleString()} 个标注实例`,
+          },
+          grid: { left: 60, right: 24, top: 34, bottom: 108 },
+          xAxis: {
+            type: "category",
+            data: items.map((item) => item.name),
+            axisLabel: {
+              color: "#94a3b8",
+              fontSize: 10,
+              interval: 0,
+              rotate: 38,
+              margin: 12,
+            },
+            axisLine: { lineStyle: { color: "#334155" } },
+            axisTick: { show: false },
+          },
+          yAxis: {
+            type: "value",
+            name: "标注实例数",
+            nameTextStyle: { color: "#64748b", fontSize: 11 },
+            axisLabel: { color: "#94a3b8", fontSize: 10 },
+            splitLine: {
+              lineStyle: { color: "rgba(51, 65, 85, 0.5)", type: "dashed" },
+            },
+          },
+          series: [
+            {
+              name: "标注实例数",
+              type: "bar",
+              data: items.map((item) => item.count),
+              barMaxWidth: 24,
+              itemStyle: {
+                borderRadius: [4, 4, 0, 0],
+                shadowBlur: 12,
+                shadowColor: "rgba(34, 211, 238, 0.35)",
+                shadowOffsetY: 6,
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: "#67e8f9" },
+                  { offset: 1, color: "#3b82f6" },
+                ]),
+              },
+            },
+          ],
+        });
+      }
+
+      // 最近 7 天推理量：全部取自 /api/trend/ 的真实统计，前端不造数
+      async function loadTrend() {
+        try {
+          const resp = await fetch("{% url 'api_trend' %}");
+          const data = await resp.json();
+          trendDates = data.dates || [];
+          trendCounts = data.counts || [];
+        } catch (error) {
+          console.warn("读取推理趋势失败", error);
+          trendDates = [];
+          trendCounts = [];
+        }
+      }
+
+      async function refreshDashboard() {
+        await loadTrend();
+        initDashboardCharts();
+        refreshHistory();
+      }
+
+      function initDashboardCharts() {
+        if (typeof echarts === "undefined") return;
+        const trendEl = document.getElementById("trendChart");
+        const pieEl = document.getElementById("pieChart");
+        if (!trendEl || !pieEl) return;
+
+        // 切换模块后 DOM 已重建，旧实例绑在已销毁的节点上，必须重建
+        if (trendChart && trendChart.getDom() !== trendEl) {
+          trendChart.dispose();
+          trendChart = null;
+        }
+        if (pieChart && pieChart.getDom() !== pieEl) {
+          pieChart.dispose();
+          pieChart = null;
+        }
+
+        const axisColor = "#64748b";
+        if (!trendChart) trendChart = echarts.init(trendEl);
+        trendChart.setOption({
+          backgroundColor: "transparent",
+          tooltip: { trigger: "axis" },
+          grid: { left: 44, right: 20, top: 30, bottom: 30 },
+          xAxis: {
+            type: "category",
+            boundaryGap: false,
+            data: trendDates,
+            axisLine: { lineStyle: { color: "#334155" } },
+            axisLabel: { color: axisColor },
+          },
+          yAxis: {
+            type: "value",
+            splitLine: { lineStyle: { color: "rgba(51,65,85,0.45)" } },
+            axisLabel: { color: axisColor },
+          },
+          series: [
+            {
+              name: "推理量",
+              type: "line",
+              smooth: true,
+              symbolSize: 7,
+              data: trendCounts,
+              lineStyle: { width: 3, color: "#22d3ee" },
+              itemStyle: { color: "#22d3ee" },
+              areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: "rgba(34,211,238,0.35)" },
+                  { offset: 1, color: "rgba(34,211,238,0)" },
+                ]),
+              },
+            },
+          ],
+        });
+
+        if (!pieChart) pieChart = echarts.init(pieEl);
+        pieChart.setOption({
+          backgroundColor: "transparent",
+          tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+          color: PIE_COLORS,
+          legend: { show: false },
+          series: [
+            {
+              name: "类别占比",
+              type: "pie",
+              radius: ["40%", "66%"],
+              center: ["50%", "50%"],
+              avoidLabelOverlap: true,
+              label: { show: false },
+              labelLine: { show: false },
+              emphasis: {
+                label: {
+                  show: true,
+                  color: "#e2e8f0",
+                  fontWeight: "bold",
+                  formatter: "{b}\n{d}%",
+                },
+                scaleSize: 8,
+              },
+              itemStyle: { borderColor: "#0f172a", borderWidth: 2 },
+              data: PIE_DATA,
+            },
+          ],
+        });
+
+        // 用 HTML 自绘图例，避免 24 个类别在 ECharts 图例里拥挤/翻页
+        const legendEl = document.getElementById("pie-legend");
+        if (legendEl) {
+          legendEl.innerHTML = "";
+          const totalValue =
+            PIE_DATA.reduce((sum, item) => sum + item.value, 0) || 1;
+          PIE_DATA.forEach((item, index) => {
+            const row = document.createElement("div");
+            row.className = "flex items-start gap-1.5";
+            const dot = document.createElement("span");
+            dot.className = "inline-block h-2 w-2 shrink-0 rounded-sm";
+            dot.style.backgroundColor = PIE_COLORS[index % PIE_COLORS.length];
+            const text = document.createElement("span");
+            text.className = "break-words";
+            text.textContent = `${item.name} ${((item.value / totalValue) * 100).toFixed(1)}%`;
+            row.append(dot, text);
+            legendEl.appendChild(row);
+          });
+        }
+      }
+
+      window.addEventListener("resize", () => {
+        if (trendChart) trendChart.resize();
+        if (pieChart) pieChart.resize();
+        if (dataBarChart) dataBarChart.resize();
+      });
+
+      // ===== Vue：五大模块切换 =====
+      const { createApp } = Vue;
+      createApp({
+        data() {
+          return {
+            currentTab: "infer",
+            tabs: [
+              { key: "intro", label: "📖 项目介绍" },
+              { key: "data", label: "📊 数据理解" },
+              { key: "train", label: "⚙️ 模型训练" },
+              { key: "infer", label: "🎯 模型推理" },
+              { key: "dashboard", label: "💳 推理概览" },
+            ],
+          };
+        },
+        watch: {
+          currentTab(value) {
+            if (value === "data") {
+              this.$nextTick(() => {
+                initDataBarChart();
+              });
+            }
+            if (value === "dashboard") {
+              this.$nextTick(() => {
+                refreshDashboard();
+              });
+            }
+          },
+        },
+      }).mount("#app");
     </script>
   </body>
 </html>
