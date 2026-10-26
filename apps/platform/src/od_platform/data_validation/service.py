@@ -10,8 +10,10 @@ from typing import List, Optional
 
 from od_platform.common import paths, stamp
 from od_platform.common.lineage import compute_data_fingerprint
+from od_platform.common.progress import ProgressCallback
 from od_platform.data_validation import VALIDATOR_VERSION
 from od_platform.data_validation.checks._lineage import load_manifest_from_yaml
+from od_platform.data_validation.history import compare_reports, find_previous_report
 from od_platform.data_validation.registry import (
     CheckContext, CheckEntry, CheckResult, CheckSeverity, get_all_checks,
 )
@@ -28,27 +30,43 @@ def _safe_run_one(entry: CheckEntry, ctx: CheckContext) -> CheckResult:
                            {"exception": repr(e)})
 
 
-def run_all_checks(ctx: CheckContext) -> List[CheckResult]:
-    return [_safe_run_one(e, ctx) for e in get_all_checks()]
+def run_all_checks(
+    ctx: CheckContext,
+    progress: ProgressCallback | None = None,
+) -> List[CheckResult]:
+    entries = get_all_checks()
+    if progress:
+        progress("D4 执行质检项", 0, len(entries))
+    results = []
+    for current, entry in enumerate(entries, 1):
+        results.append(_safe_run_one(entry, ctx))
+        if progress:
+            progress("D4 执行质检项", current, len(entries))
+    return results
 
 
 def validate_dataset(yaml_path, task_type: Optional[str] = None,
                      run_id: Optional[str] = None,
-                     write_report: bool = True) -> ValidationReport:
+                     write_report: bool = True,
+                     progress: ProgressCallback | None = None) -> ValidationReport:
     """端到端:快照 → 全量 check → 报告(logger + json/csv)。"""
     t0 = time.perf_counter()
     run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
     yaml_path = Path(yaml_path)
-    snapshot = build_snapshot(yaml_path, task_type=task_type)
-    results = run_all_checks(CheckContext(yaml_path=yaml_path, snapshot=snapshot))
+    snapshot = build_snapshot(yaml_path, task_type=task_type, progress=progress)
+    results = run_all_checks(
+        CheckContext(yaml_path=yaml_path, snapshot=snapshot), progress=progress)
     report = ValidationReport(run_id=run_id, snapshot=snapshot, results=results,
                               duration_seconds=time.perf_counter() - t0)
+    previous = find_previous_report(yaml_path, run_id)
+    report.comparison = compare_reports(results, previous)
     report.render_to_logger()
     if write_report:
         out_dir = paths.validation_run_dir(run_id)
         out_dir.mkdir(parents=True, exist_ok=True)
         report.write_json(out_dir / "report.json")
         report.write_results_csv(out_dir / "results.csv")
+        report.write_comparison_json(out_dir / "comparison.json")
 
     # ★ 盖 validate 章: 我(D4)验过这批数据。仅在【能定位到 manifest】时盖 ——
     #   没有 manifest 的数据集(非 odp-transform 产出)谈不上流转卡, 跳过。
