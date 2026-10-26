@@ -8,5 +8,6 @@ urlpatterns = [
     path('api/explain/', views.api_generate_explanation, name="api_explain"),
     path('api/today-cost/', views.api_today_cost, name="api_today_cost"),
     path('api/history/', views.api_history, name="api_history"),
+    path('api/trend/', views.api_trend, name="api_trend"),
     path('api/record/<int:record_id>/', views.api_record_detail, name="api_record_detail"),
 ]
