@@ -123,8 +123,16 @@ def _infer_video(model, src: Path, dest: Path):
             annotated = result.plot()
             if writer is None:
                 h, w = annotated.shape[:2]
-                writer = cv2.VideoWriter(str(dest), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
-            writer.write(annotated)
+                # H.264(yuv420p) 要求宽高为偶数：奇数尺寸裁掉 1 像素
+                size = (w - w % 2, h - h % 2)
+                # 浏览器只支持 H.264 的 mp4，mp4v(MPEG-4 Part 2) 会黑屏
+                writer = cv2.VideoWriter(str(dest), cv2.VideoWriter_fourcc(*"avc1"), fps, size)
+                if not writer.isOpened():
+                    logger.warning("avc1(H.264) 编码器不可用，回退 mp4v（浏览器可能无法播放）")
+                    writer = cv2.VideoWriter(str(dest), cv2.VideoWriter_fourcc(*"mp4v"), fps, size)
+                if not writer.isOpened():
+                    raise RuntimeError("无法创建视频编码器（avc1 / mp4v 均不可用）")
+            writer.write(annotated[: size[1], : size[0]])
             for name, count in _count_classes(result.boxes, model.names).items():
                 counts[name] = counts.get(name, 0) + count
             if result.boxes is not None and len(result.boxes) > 0:
@@ -136,6 +144,12 @@ def _infer_video(model, src: Path, dest: Path):
             writer.release()
     if frames == 0:
         raise RuntimeError("视频中没有可读取的帧")
+    # 校验产物确实可解码（个别编码器 isOpened() 会假成功，留下浏览器黑屏的空文件）
+    probe = cv2.VideoCapture(str(dest))
+    readable = int(probe.get(cv2.CAP_PROP_FRAME_COUNT))
+    probe.release()
+    if readable <= 0:
+        raise RuntimeError("视频编码失败：输出文件不含可读帧")
     return counts, max_conf, frames
 
 
