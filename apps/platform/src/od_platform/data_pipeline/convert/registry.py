@@ -11,6 +11,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from od_platform.common.progress import ProgressCallback
+
 ConverterFunc = Callable[[Path, Path, "ConvertOptions"], list[str]]
 
 
@@ -19,6 +21,7 @@ class ConvertOptions:
     """传给所有转换器的横切选项(参数包)。加新选项时这里加字段,签名不变。"""
     task: str = "detect"                        # detect / segment
     classes: list[str] | None = field(default=None)  # None=不过滤;[]=全排除;[...]=白名单
+    progress: ProgressCallback | None = None
 
 
 @dataclass(frozen=True)

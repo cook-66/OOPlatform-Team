@@ -15,6 +15,7 @@ from pathlib import Path
 
 from od_platform.common import paths
 from od_platform.common.lineage import SplitManifest
+from od_platform.common.progress import ProgressCallback
 
 logger = logging.getLogger(__name__)
 
@@ -89,16 +90,24 @@ def _copy_pair(img: Path, lbl: Path, out: SplitOutputDirs, split: str) -> None:
 
 
 def materialize(manifest: SplitManifest, source: SplitSourceDirs,
-                out: SplitOutputDirs) -> dict[str, int]:
+                out: SplitOutputDirs,
+                progress: ProgressCallback | None = None) -> dict[str, int]:
     """按 manifest 物化。返回各 split 的样本数。"""
     for leaf in out.leaves:
         _assert_within(paths.PROCESSED_DATA_DIR, leaf)
         _safe_clear(leaf)
     counts: dict[str, int] = {}
+    total = len(manifest.samples)
+    current = 0
+    if progress:
+        progress("D3 物化训练集", 0, total)
     for split in _SPLITS:
         stems = manifest.stems_of(split)
         for stem in stems:
             img, lbl = source.resolve(stem)
             _copy_pair(img, lbl, out, split)
+            current += 1
+            if progress:
+                progress("D3 物化训练集", current, total)
         counts[split] = len(stems)
     return counts
