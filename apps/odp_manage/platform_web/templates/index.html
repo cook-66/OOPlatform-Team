@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ODP · AI 平台 Web 调度中心</title>
+    <title>水下目标识别工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       body {
@@ -175,6 +175,7 @@
             id="preview-video"
             controls
             playsinline
+            webkit-playsinline
             class="hidden max-h-[320px] w-auto object-contain"
           ></video>
           <span id="preview-tip" class="text-slate-600 text-sm"
@@ -325,6 +326,7 @@
                   id="detail-original-video"
                   controls
                   playsinline
+                  webkit-playsinline
                   class="hidden max-h-[240px] w-auto object-contain"
                 ></video>
                 <span class="detail-empty text-sm text-slate-600">无原图</span>
@@ -346,9 +348,12 @@
                   id="detail-result-video"
                   controls
                   playsinline
+                  webkit-playsinline
                   class="hidden max-h-[240px] w-auto object-contain"
                 ></video>
-                <span class="detail-empty text-sm text-slate-600">无结果图</span>
+                <span class="detail-empty text-sm text-slate-600"
+                  >无结果图</span
+                >
               </div>
             </div>
           </div>
@@ -547,9 +552,9 @@
           }
           detailTimeEl.textContent = data.created_at || "—";
           detailClassesEl.textContent = data.detected_classes || "—";
-          detailConfidenceEl.textContent = Number(
-            data.confidence || 0,
-          ).toFixed(3);
+          detailConfidenceEl.textContent = Number(data.confidence || 0).toFixed(
+            3,
+          );
           detailExplanationEl.textContent =
             data.llm_explanation || "该记录暂无大模型解释";
           detailCostEl.textContent = `¥ ${Number(data.llm_cost || 0).toFixed(6)}`;

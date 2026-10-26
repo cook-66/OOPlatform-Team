@@ -27,19 +27,37 @@ BILLING_FILE = "billing_records.json"
 # ==========================================
 # 2. 内部工具函数
 # ==========================================
-def _ask_llm(detect_info: dict) -> dict:
+# 水下生态解释的防呆系统提示词 (防止模型顺着误检结果编造场景)
+GUARDRAIL_PROMPT = (
+    "你是一个严谨的水下生态分析专家。如果检测结果的置信度很低，或者缺乏明显目标，"
+    "请明确表示无法确认。不要过度臆测画面场景，不要描述未检测到的生物，"
+    "也不要推测拍摄地点、时间或事件经过。"
+)
+
+
+def _ask_llm(
+    detect_info: dict,
+    system_prompt: str | None = None,
+    conf_threshold: float | None = None,
+) -> dict:
     """把 YOLO 的检测字典发给大模型解释，并返回文字和 Token 消耗"""
     if not detect_info:
-        return {"text": "未检测到显著目标。", "cost": 0.0, "tokens": 0}
+        return {"text": "未检测到显著目标，无法确认画面中的生物种类。", "cost": 0.0, "tokens": 0}
         
     desc = "、".join([f"{count}个{name}" for name, count in detect_info.items()])
-    prompt = f"我上传了一段视频，本地 YOLO 视觉模型在其中检测到了：{desc}。请以智能安防助手的身份，用一段自然语言向我解释这个场景可能正在发生什么。"
+    prompt = f"我上传了一段影像，本地 YOLO 视觉模型在其中检测到了：{desc}。请用一段自然语言向我解释这个场景的生态学含义。"
+    if conf_threshold is not None:
+        prompt += (
+            f"（说明：以上结果仅在置信度 ≥ {conf_threshold} 时保留，低于该阈值的候选框已被过滤。）"
+            "请只依据这些类别和数量给出分析；若类别信息自相矛盾或数量过少、不足以支撑判断，"
+            "请直接说明“无法确认”，不要编造画面细节。"
+        )
 
     logger.info(f"正在请求大模型解释，检测数据：{detect_info}")
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[
-            {"role": "system", "content": "你是一个专业的视频分析助手。"},
+            {"role": "system", "content": system_prompt or "你是一个专业的视频分析助手。"},
             {"role": "user", "content": prompt}
         ]
     )
@@ -122,6 +140,26 @@ def estimate_cost(file) -> dict:
     except Exception as e:
         logger.error(f"预估失败: {e}")
         return {"duration": 0, "estimated_tokens": 0, "estimated_cost": 0.0}
+
+
+def analyze_detection(detect_info: dict, conf_threshold: float | None = None) -> dict:
+    """带防呆约束的完整结果入口：返回 {text, cost, tokens}（供需要计费的业务方调用）。
+
+    「text」是解释正文，「cost」是本次调用的预估费用（元），「tokens」是总 token 数。
+    """
+    return _ask_llm(
+        detect_info,
+        system_prompt=GUARDRAIL_PROMPT,
+        conf_threshold=conf_threshold,
+    )
+
+
+def generate_explanation(detect_info: dict, conf_threshold: float | None = None) -> str:
+    """对外公开的文字版解释入口：检测类别计数 -> 中文分析文本（供 Django 等业务方调用）。
+
+    强制使用水下生态防呆提示词：低置信度/目标不足时必须回答“无法确认”，不得臆测。
+    """
+    return analyze_detection(detect_info, conf_threshold=conf_threshold)["text"]
 
 
 def analyze_video(file) -> dict:

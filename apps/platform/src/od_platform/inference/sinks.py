@@ -87,6 +87,7 @@ class LocalFileSink(OutputSink):
         self.output_dir: Path | None = None
         self._is_stream: bool = False
         self._video = None      # cv2.VideoWriter, lazy
+        self._size = None       # 视频输出尺寸(偶数), lazy
         self._count: int = 0
 
     def open(self, output_dir: Path, source_type: SourceType) -> None:
@@ -101,8 +102,19 @@ class LocalFileSink(OutputSink):
                     h, w = annotated.shape[:2]
                     fps = float(frame.info.fps) if getattr(frame.info, "fps", None) else 30.0
                     out = self.output_dir / "output.mp4"
-                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                    self._video = cv2.VideoWriter(str(out), fourcc, fps, (w, h))
+                    # H.264(yuv420p) 要求宽高为偶数，奇数尺寸裁掉 1 像素
+                    self._size = (w - w % 2, h - h % 2)
+                    self._video = cv2.VideoWriter(
+                        str(out), cv2.VideoWriter_fourcc(*"avc1"), fps, self._size
+                    )
+                    if not self._video.isOpened():
+                        # 没有 H.264 编码器时回退 mp4v（部分浏览器会黑屏）
+                        logger.warning("avc1(H.264) 编码器不可用，回退 mp4v")
+                        self._video = cv2.VideoWriter(
+                            str(out), cv2.VideoWriter_fourcc(*"mp4v"), fps, self._size
+                        )
+                if self._size is not None:
+                    annotated = annotated[: self._size[1], : self._size[0]]
                 self._video.write(annotated)
             else:
                 fname = frame.info.filename or f"frame_{frame.info.frame_index:06d}"
@@ -119,6 +131,7 @@ class LocalFileSink(OutputSink):
                 logger.warning(f"LocalFileSink.close release 失败 (已吞): {e}")
             finally:
                 self._video = None
+                self._size = None
 
 
 # ============================================================================
