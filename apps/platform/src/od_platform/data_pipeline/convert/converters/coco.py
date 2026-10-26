@@ -36,7 +36,10 @@ def convert_coco(input_dir: Path, output_labels_dir: Path,
         per_image[a["image_id"]].append(a)
 
     seg = options.task == Task.SEGMENT
-    for img_id, im in img_info.items():
+    total = len(img_info)
+    if options.progress:
+        options.progress("D3 转换 COCO", 0, total)
+    for current, (img_id, im) in enumerate(img_info.items(), 1):
         W, H = float(im["width"]), float(im["height"])
         lines: list[str] = []
         for a in per_image.get(img_id, []):
@@ -55,4 +58,6 @@ def convert_coco(input_dir: Path, output_labels_dir: Path,
         stem = Path(im["file_name"]).stem
         (output_labels_dir / f"{stem}.txt").write_text(
             "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+        if options.progress:
+            options.progress("D3 转换 COCO", current, total)
     return names

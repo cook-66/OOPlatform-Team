@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import yaml
 
 from od_platform.common.constants import IMAGE_EXTENSIONS, Task
+from od_platform.common.progress import ProgressCallback
 from od_platform.data_validation.labels import parse_label_line
 
 logger = logging.getLogger(__name__)
@@ -99,18 +100,27 @@ def _normalize_names(names) -> List[str]:
     return []
 
 
-def _build_stats(snap: DatasetSnapshot) -> None:
+def _build_stats(snap: DatasetSnapshot, progress: ProgressCallback | None = None) -> None:
     """内容层:扫一遍期望标签路径,聚合 SplitStats。读取失败跳过(结构问题归 label_format)。"""
     nc = snap.nc
+    total = sum(len(label_paths) for label_paths in snap.labels_per_split.values())
+    current = 0
+    if progress:
+        progress("D4 构建数据快照", 0, total)
     for split, label_paths in snap.labels_per_split.items():
         n_annotated = n_inst = 0
         class_inst: Dict[int, int] = {}
         for lbl in label_paths:
+            current += 1
             if not lbl.exists():
+                if progress:
+                    progress("D4 构建数据快照", current, total)
                 continue
             try:
                 text = lbl.read_text(encoding="utf-8")
             except OSError:
+                if progress:
+                    progress("D4 构建数据快照", current, total)
                 continue
             n_valid = 0
             for line in text.splitlines():
@@ -124,6 +134,8 @@ def _build_stats(snap: DatasetSnapshot) -> None:
                 cid = box[0]
                 if isinstance(nc, int) and 0 <= cid < nc:
                     class_inst[cid] = class_inst.get(cid, 0) + 1
+            if progress:
+                progress("D4 构建数据快照", current, total)
             if n_valid:
                 n_annotated += 1
                 n_inst += n_valid
@@ -134,7 +146,11 @@ def _build_stats(snap: DatasetSnapshot) -> None:
             class_instances=class_inst)
 
 
-def build_snapshot(yaml_path: Path, task_type: Optional[str] = None) -> DatasetSnapshot:
+def build_snapshot(
+    yaml_path: Path,
+    task_type: Optional[str] = None,
+    progress: ProgressCallback | None = None,
+) -> DatasetSnapshot:
     yaml_path = Path(yaml_path)
     snap = DatasetSnapshot(yaml_path=yaml_path)
     data, err = _load_yaml(yaml_path)
@@ -174,5 +190,5 @@ def build_snapshot(yaml_path: Path, task_type: Optional[str] = None) -> DatasetS
         snap.labels_per_split[split] = tuple(_label_path_for_image(p) for p in images)
         snap.label_files_per_split[split] = _list_label_files(snap.data_root, split)
 
-    _build_stats(snap)
+    _build_stats(snap, progress=progress)
     return snap

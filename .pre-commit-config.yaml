@@ -1,0 +1,21 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-data-tooling
+        name: Ruff full checks for new D3/D4 tooling
+        entry: ruff check
+        language: python
+        additional_dependencies: ["ruff>=0.1.0"]
+        files: ^apps/platform/(src/od_platform/(common/progress|data_validation/history)\.py|tests/test_data_tooling\.py)$
+      - id: ruff-critical
+        name: Ruff critical Python checks
+        entry: ruff check --select E9,F63,F7,F82
+        language: python
+        additional_dependencies: ["ruff>=0.1.0"]
+        types: [python]
+      - id: data-engineering-tests
+        name: D3/D4 pytest regression
+        entry: python scripts/precommit_data_tests.py
+        language: system
+        pass_filenames: false
+        always_run: true

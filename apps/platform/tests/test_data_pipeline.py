@@ -86,3 +86,19 @@ def test_preserve_source_keeps_declared_split():
                            group_per_image=source)
     assert splits == {"train": ["train_a", "train_b"], "val": ["val_a"],
                       "test": ["test_a"]}
+
+
+def test_pipeline_emits_large_step_progress(demo_yaml):
+    events = []
+    original_yaml = demo_yaml.read_bytes()
+    try:
+        DatasetPipeline(
+            "demo", AnnotationFormat.PASCAL_VOC,
+            split_strategy=SplitStrategy.STRATIFIED_MULTILABEL,
+            progress=lambda stage, current, total: events.append((stage, current, total)),
+        ).run()
+    finally:
+        demo_yaml.write_bytes(original_yaml)
+    completed = {stage for stage, current, total in events if current == total}
+    assert {"D3 转换 VOC", "D3 扫描转换结果", "D3 计算数据指纹",
+            "D3 物化训练集", "D3 写入契约与 YAML"} <= completed

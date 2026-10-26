@@ -27,6 +27,7 @@ from od_platform.common.lineage import (
     SplitManifest, TOOL_VERSION, compute_data_fingerprint,
 )
 from od_platform.common.run_context import RunContext
+from od_platform.common.progress import ProgressCallback
 from od_platform.data_pipeline.convert.registry import ConvertOptions
 from od_platform.data_pipeline.convert.service import convert_data_to_yolo
 from od_platform.data_pipeline.report import (
@@ -63,6 +64,7 @@ class DatasetPipeline:
         random_state: int = DEFAULT_RANDOM_STATE,
         split_strategy: str = DEFAULT_SPLIT_STRATEGY,
         run: RunContext | None = None,
+        progress: ProgressCallback | None = None,
     ):
         self.dataset = dataset
         self.annotation_format = annotation_format
@@ -73,6 +75,7 @@ class DatasetPipeline:
         self.random_state = random_state
         self.split_strategy = split_strategy
         self._run_ctx = run        # 存成私有名:实例属性不能遮蔽 run() 方法
+        self.progress = progress
         self.raw_root = paths.raw_dataset_root(dataset)
         self._layout: SourceLayout | None = None
 
@@ -116,13 +119,19 @@ class DatasetPipeline:
         image_index = self._layout.image_index
         labels_per_image: dict[str, list[str]] = defaultdict(list)
         label_bytes: dict[str, bytes] = {}
-        for txt in sorted(staging.glob("*.txt")):
+        label_files = sorted(staging.glob("*.txt"))
+        total = len(label_files)
+        if self.progress:
+            self.progress("D3 扫描转换结果", 0, total)
+        for current, txt in enumerate(label_files, 1):
             label_bytes[txt.stem] = txt.read_bytes()
             for line in txt.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
                 if line:
                     idx = int(line.split()[0])
                     labels_per_image[txt.stem].append(classes[idx])
+            if self.progress:
+                self.progress("D3 扫描转换结果", current, total)
         return image_index, labels_per_image, label_bytes
 
     # ---- 主流程 ----
@@ -135,6 +144,8 @@ class DatasetPipeline:
 
     def _execute(self, run: RunContext) -> dict[str, object]:
         self._check_raw()
+        if self.progress:
+            self.progress("D3 发现数据目录", 1, 1)
         out = SplitOutputDirs.for_dataset(self.dataset)
 
         with tempfile.TemporaryDirectory(prefix="odp_pipe_") as staging_dir:
@@ -143,8 +154,11 @@ class DatasetPipeline:
             requested_classes = self.classes or self._layout.classes_hint
             classes: list[str] | None = None
             for _source_split, ann_in in self._layout.annotation_dirs:
-                options = ConvertOptions(task=self.task,
-                                         classes=requested_classes if classes is None else classes)
+                options = ConvertOptions(
+                    task=self.task,
+                    classes=requested_classes if classes is None else classes,
+                    progress=self.progress,
+                )
                 converted_classes = convert_data_to_yolo(
                     ann_in, staging, self.annotation_format, options)
                 if classes is None:
@@ -192,20 +206,23 @@ class DatasetPipeline:
                 ratios=ratios,
                 names=classes, splits=splits, label_bytes=label_bytes,
                 image_paths=image_index,
-                created_at=run.created_at)
+                created_at=run.created_at,
+                progress=self.progress)
             manifest_path = run.artifact_path("manifest.json")
             manifest.write(manifest_path)
             manifest_ref = manifest_path.relative_to(paths.ROOT_DIR).as_posix()
 
             source = SplitSourceDirs(images=self._layout.root / "images", labels=staging,
                                      image_index=image_index)
-            counts = materialize(manifest, source, out)
+            counts = materialize(manifest, source, out, progress=self.progress)
 
             yaml_path = paths.dataset_yaml_path(self.dataset)
             write_dataset_yaml(
                 yaml_path, dataset_root=out.root, classes=classes, manifest=manifest,
                 dataset_name=self.dataset, source_format=self.annotation_format,
                 task=self.task, manifest_ref=manifest_ref)
+            if self.progress:
+                self.progress("D3 写入契约与 YAML", 1, 1)
 
         logger.info("数据集 %r 完成: %s", self.dataset, counts)
 

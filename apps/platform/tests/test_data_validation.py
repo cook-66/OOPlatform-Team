@@ -68,6 +68,17 @@ def test_exit_code_blocks_on_error(demo_yaml_tampered_label):
     assert report.overall_severity == CheckSeverity.ERROR
 
 
+def test_validation_emits_snapshot_and_check_progress(demo_yaml):
+    events = []
+    validate_dataset(demo_yaml, write_report=False,
+                     progress=lambda stage, current, total: events.append(
+                         (stage, current, total)))
+    assert any(stage == "D4 构建数据快照" and current == total
+               for stage, current, total in events)
+    assert any(stage == "D4 执行质检项" and current == total
+               for stage, current, total in events)
+
+
 def test_bbox_within_image_flags_overflow(demo_yaml_bbox_overflow):
     r = _run(demo_yaml_bbox_overflow, "bbox_within_image")
     assert r.severity in (CheckSeverity.WARNING, CheckSeverity.ERROR)
