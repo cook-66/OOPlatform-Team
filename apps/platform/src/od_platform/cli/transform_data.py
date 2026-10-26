@@ -18,6 +18,7 @@ from od_platform.common.constants import (
     Task,
 )
 from od_platform.common.logging_utils import get_logger
+from od_platform.common.progress import TerminalProgress
 from od_platform.common.run_context import RunContext
 from od_platform.data_pipeline.orchestrator import DatasetPipeline
 
@@ -47,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    progress = TerminalProgress()
     try:
         with RunContext("data_pipeline") as run:
             result = DatasetPipeline(
@@ -54,10 +56,13 @@ def main(argv: list[str] | None = None) -> int:
                 train_rate=args.train_rate, val_rate=args.val_rate,
                 classes=args.classes, random_state=args.seed,
                 split_strategy=args.split_strategy, run=run,
+                progress=progress,
             ).run()
     except (FileNotFoundError, ValueError) as e:
         logger.error("%s", e)
         return EXIT_DATA_ERR
+    finally:
+        progress.close()
     logger.info("yaml: %s", result["yaml"])
     logger.info("manifest: %s", result["manifest_path"])
     logger.info("fingerprint: %s", result["contract_fingerprint"])

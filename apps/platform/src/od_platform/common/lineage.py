@@ -17,6 +17,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
+from od_platform.common.progress import ProgressCallback
+
 TOOL_VERSION = "odp-transform/0.5"       # 0.5:样本身份同时覆盖图片与标签
 
 
@@ -122,14 +124,25 @@ class SplitManifest:
         label_bytes: dict[str, bytes],
         image_paths: dict[str, Path] | None = None,
         created_at: str = "",
+        progress: ProgressCallback | None = None,
     ) -> SplitManifest:
         """从划分结果 + 标签字节构建契约。label_bytes 以 stem 为键。"""
-        samples = [
-            SampleLineage(stem, split, _sha256_bytes(label_bytes[stem]),
-                          _sha256_bytes(image_paths[stem].read_bytes()) if image_paths else "")
-            for split, stems in splits.items()
-            for stem in stems
-        ]
+        total = sum(len(stems) for stems in splits.values())
+        if progress:
+            progress("D3 计算数据指纹", 0, total)
+        samples = []
+        current = 0
+        for split, stems in splits.items():
+            for stem in stems:
+                samples.append(SampleLineage(
+                    stem,
+                    split,
+                    _sha256_bytes(label_bytes[stem]),
+                    _sha256_bytes(image_paths[stem].read_bytes()) if image_paths else "",
+                ))
+                current += 1
+                if progress:
+                    progress("D3 计算数据指纹", current, total)
         samples.sort(key=lambda s: s.stem)
         m = cls(dataset=dataset, strategy=strategy, seed=seed, ratios=ratios,
                 names=list(names), samples=samples,

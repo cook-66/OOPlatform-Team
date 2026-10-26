@@ -28,7 +28,10 @@ def convert_pascal_voc(input_dir: Path, output_labels_dir: Path,
         classes = list(options.classes)
     class_to_idx = {n: i for i, n in enumerate(classes)}
 
-    for xf in xml_files:
+    total = len(xml_files)
+    if options.progress:
+        options.progress("D3 转换 VOC", 0, total)
+    for current, xf in enumerate(xml_files, 1):
         root = ET.parse(xf).getroot()
         size = root.find("size")
         W = float(size.findtext("width"))
@@ -45,4 +48,6 @@ def convert_pascal_voc(input_dir: Path, output_labels_dir: Path,
             lines.append(f"{class_to_idx[name]} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
         (output_labels_dir / f"{xf.stem}.txt").write_text(
             "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+        if options.progress:
+            options.progress("D3 转换 VOC", current, total)
     return classes

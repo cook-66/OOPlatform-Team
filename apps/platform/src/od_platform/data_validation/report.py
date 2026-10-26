@@ -20,6 +20,7 @@ class ValidationReport:
     snapshot: Any                                    # DatasetSnapshot(避免循环 import)
     results: List[CheckResult] = field(default_factory=list)
     duration_seconds: float = 0.0
+    comparison: Dict[str, Any] | None = None
 
     @property
     def overall_severity(self) -> str:
@@ -29,7 +30,7 @@ class ValidationReport:
         return max((r.severity for r in self.results), key=CheckSeverity.rank)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        document = {
             "run_id": self.run_id,
             "yaml_path": str(self.snapshot.yaml_path),
             "overall_severity": self.overall_severity,
@@ -40,6 +41,9 @@ class ValidationReport:
                 for r in self.results
             ],
         }
+        if self.comparison is not None:
+            document["comparison"] = self.comparison
+        return document
 
     def write_json(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,6 +59,13 @@ class ValidationReport:
             for r in self.results:
                 w.writerow([self.run_id, r.name, r.severity, r.summary])
 
+    def write_comparison_json(self, path: Path) -> None:
+        if self.comparison is None:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.comparison, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+
     def render_to_logger(self, log=None) -> None:
         log = log or logger
         log.info("=" * 60)
@@ -63,6 +74,11 @@ class ValidationReport:
         log.info("=" * 60)
         for r in self.results:
             log.info("[%-7s] %s: %s", r.severity, r.name, r.summary)
+        if self.comparison is not None:
+            log.info("-" * 60)
+            log.info("历史对比: %s", self.comparison["summary"])
+            if self.comparison.get("previous_run_id"):
+                log.info("对比基线 run_id: %s", self.comparison["previous_run_id"])
         fp = next((r for r in self.results if r.name == "fingerprint_match"), None)
         if fp and fp.details.get("fingerprint"):
             log.info("-" * 60)
