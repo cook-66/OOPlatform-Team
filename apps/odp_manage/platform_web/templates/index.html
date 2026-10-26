@@ -1,159 +1,717 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ODP · AI 平台 Web 调度中心</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>水下目标识别工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            background-color: #05070f;
-            background-image:
-                radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.18), transparent 45%),
-                radial-gradient(circle at 85% 10%, rgba(129, 140, 248, 0.18), transparent 40%),
-                linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
-            background-size: auto, auto, 40px 40px, 40px 40px;
-        }
-    </style>
-</head>
-<body class="min-h-screen text-slate-200 font-sans">
+      body {
+        background-color: #05070f;
+        background-image:
+          radial-gradient(
+            circle at 15% 20%,
+            rgba(56, 189, 248, 0.18),
+            transparent 45%
+          ),
+          radial-gradient(
+            circle at 85% 10%,
+            rgba(129, 140, 248, 0.18),
+            transparent 40%
+          ),
+          linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+        background-size:
+          auto,
+          auto,
+          40px 40px,
+          40px 40px;
+      }
 
+      /* 顶部面板切换按钮 */
+      .tab-btn {
+        padding: 0.5rem 1.25rem;
+        border-radius: 0.6rem;
+        border: 1px solid #1e293b;
+        background-color: rgba(30, 41, 59, 0.7);
+        color: #94a3b8;
+        font-size: 0.875rem;
+        transition:
+          background-color 0.15s ease,
+          color 0.15s ease;
+      }
+      .tab-btn:hover {
+        background-color: rgba(51, 65, 85, 0.8);
+        color: #e2e8f0;
+      }
+      .tab-active {
+        background: linear-gradient(90deg, #06b6d4, #6366f1);
+        border-color: transparent;
+        color: #020617;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-200 font-sans">
     <!-- 顶部标题 -->
     <header class="border-b border-slate-800/80 backdrop-blur">
-        <div class="max-w-6xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-4">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-bold tracking-wider bg-gradient-to-r from-cyan-300 via-sky-400 to-indigo-400 bg-clip-text text-transparent">
-                    AI 平台 Web 调度中心
-                </h1>
-                <p class="mt-1 text-xs md:text-sm text-slate-500 tracking-widest uppercase">ODP · Orchestration Console</p>
-            </div>
-            <div class="flex items-center gap-2 text-xs text-emerald-400">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                SYSTEM ONLINE
-            </div>
+      <div
+        class="max-w-6xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-4"
+      >
+        <div>
+          <h1
+            class="text-2xl md:text-3xl font-bold tracking-wider bg-gradient-to-r from-cyan-300 via-sky-400 to-indigo-400 bg-clip-text text-transparent"
+          >
+            水下目标识别
+          </h1>
+          <p
+            class="mt-1 text-xs md:text-sm text-slate-500 tracking-widest uppercase"
+          >
+            Underwater target identification
+          </p>
         </div>
+        <div class="flex items-center gap-3 text-xs">
+          <span
+            id="today-cost"
+            class="px-3 py-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-mono"
+          >
+            今日花费 ¥ 0.000000
+          </span>
+          <span class="flex items-center gap-2 text-emerald-400">
+            <span
+              class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"
+            ></span>
+            SYSTEM ONLINE
+          </span>
+        </div>
+      </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-6 py-10 grid gap-8 lg:grid-cols-2">
+    <!-- 面板切换按钮 -->
+    <nav class="max-w-6xl mx-auto px-6 pt-8 flex flex-wrap gap-3">
+      <button type="button" class="tab-btn tab-active" data-panel="panel-infer">
+        视觉推理
+      </button>
+      <button type="button" class="tab-btn" data-panel="panel-history">
+        推理记录
+      </button>
+      <button type="button" class="tab-btn" data-panel="panel-billing">
+        花费账单
+      </button>
+    </nav>
 
-        <!-- 上传表单 -->
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6 shadow-[0_0_40px_-15px_rgba(56,189,248,0.6)]">
-            <h2 class="text-lg font-semibold text-cyan-300 mb-4 flex items-center gap-2">
-                <span class="w-1.5 h-5 bg-cyan-400 rounded-full"></span>图像推理任务
-            </h2>
+    <main
+      id="panel-infer"
+      class="max-w-6xl mx-auto px-6 py-10 grid gap-8 lg:grid-cols-2"
+    >
+      <!-- 上传表单 -->
+      <section
+        class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6 shadow-[0_0_40px_-15px_rgba(56,189,248,0.6)]"
+      >
+        <h2
+          class="text-lg font-semibold text-cyan-300 mb-4 flex items-center gap-2"
+        >
+          <span class="w-1.5 h-5 bg-cyan-400 rounded-full"></span>图像 /
+          视频推理任务
+        </h2>
 
-            <form id="infer-form" method="post" action="{% url 'api_infer' %}" enctype="multipart/form-data" class="space-y-4">
-                {% csrf_token %}
-                <label for="image" class="block text-sm text-slate-400">选择待检测图片</label>
-                <input id="image" name="image" type="file" accept="image/*" required
-                       class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 border border-slate-700 rounded-lg bg-slate-950/60 px-3 py-2">
+        <form
+          id="infer-form"
+          method="post"
+          action="{% url 'api_infer' %}"
+          enctype="multipart/form-data"
+          class="space-y-4"
+        >
+          {% csrf_token %}
+          <label for="image" class="block text-sm text-slate-400"
+            >选择待检测图片或视频</label
+          >
+          <input
+            id="image"
+            name="image"
+            type="file"
+            accept="image/*,video/*"
+            required
+            class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 border border-slate-700 rounded-lg bg-slate-950/60 px-3 py-2"
+          />
 
-                <button id="run-btn" type="submit"
-                        class="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-500 px-4 py-3 font-semibold text-slate-950 tracking-wide hover:from-cyan-400 hover:to-indigo-400 transition disabled:opacity-50 disabled:cursor-not-allowed">
-                    开始推理
-                </button>
-            </form>
+          <button
+            id="run-btn"
+            type="submit"
+            class="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-500 px-4 py-3 font-semibold text-slate-950 tracking-wide hover:from-cyan-400 hover:to-indigo-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            开始推理
+          </button>
+        </form>
 
-            <div class="mt-6 text-xs text-slate-500 space-y-1">
-                <p>状态：<span id="status" class="text-slate-300">等待任务提交…</span></p>
-                <p>检测类别：<span id="classes" class="text-cyan-300">—</span></p>
-            </div>
-        </section>
+        <div class="mt-6 text-xs text-slate-500 space-y-1">
+          <p>
+            状态：<span id="status" class="text-slate-300">等待任务提交…</span>
+          </p>
+          <p>检测类别：<span id="classes" class="text-cyan-300">—</span></p>
+        </div>
+      </section>
 
-        <!-- 结果预览 + 智能解释 -->
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6">
-            <h2 class="text-lg font-semibold text-indigo-300 mb-4 flex items-center gap-2">
-                <span class="w-1.5 h-5 bg-indigo-400 rounded-full"></span>推理结果
-            </h2>
+      <!-- 结果预览 + 智能解释 -->
+      <section
+        class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6"
+      >
+        <h2
+          class="text-lg font-semibold text-indigo-300 mb-4 flex items-center gap-2"
+        >
+          <span class="w-1.5 h-5 bg-indigo-400 rounded-full"></span>推理结果
+        </h2>
 
-            <div class="rounded-xl border border-slate-800 bg-slate-950/70 flex items-center justify-center min-h-[240px] overflow-hidden">
-                <img id="preview" src="" alt="结果预览"
-                     class="hidden max-h-[320px] w-auto object-contain">
-                <span id="preview-tip" class="text-slate-600 text-sm">暂无预览图</span>
-            </div>
+        <div
+          class="rounded-xl border border-slate-800 bg-slate-950/70 flex items-center justify-center min-h-[240px] overflow-hidden"
+        >
+          <img
+            id="preview"
+            src=""
+            alt="结果预览"
+            class="hidden max-h-[320px] w-auto object-contain"
+          />
+          <video
+            id="preview-video"
+            controls
+            playsinline
+            webkit-playsinline
+            class="hidden max-h-[320px] w-auto object-contain"
+          ></video>
+          <span id="preview-tip" class="text-slate-600 text-sm"
+            >暂无预览图</span
+          >
+        </div>
 
-            <h3 class="mt-6 text-sm font-semibold text-slate-300">智能解释</h3>
-            <div id="explanation"
-                 class="mt-2 rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-relaxed text-slate-400 min-h-[96px]">
-                等待模型返回解释…
-            </div>
-        </section>
+        <h3 class="mt-6 text-sm font-semibold text-slate-300">智能解释</h3>
+        <div
+          id="explanation"
+          class="mt-2 rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-relaxed text-slate-400 min-h-[96px]"
+        >
+          等待模型返回解释…
+        </div>
+
+        <div
+          id="cost-box"
+          class="mt-4 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-4 flex items-center justify-between shadow-[0_0_30px_-12px_rgba(251,191,36,0.8)]"
+        >
+          <span class="text-sm font-medium text-amber-200"
+            >💳 本次分析预估花费</span
+          >
+          <span class="font-mono text-lg font-bold text-amber-300">
+            ¥ <span id="cost-value">0.000000</span> 元
+          </span>
+        </div>
+      </section>
     </main>
 
+    <!-- 区域 B：历史推理记录 -->
+    <main id="panel-history" class="hidden max-w-6xl mx-auto px-6 py-10">
+      <section
+        class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6"
+      >
+        <h2
+          class="text-lg font-semibold text-cyan-300 mb-4 flex items-center gap-2"
+        >
+          <span class="w-1.5 h-5 bg-cyan-400 rounded-full"></span>推理记录
+        </h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead
+              class="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500"
+            >
+              <tr>
+                <th class="py-3 px-3 font-medium">时间</th>
+                <th class="py-3 px-3 font-medium">目标</th>
+                <th class="py-3 px-3 font-medium">置信度</th>
+                <th class="py-3 px-3 font-medium">花费</th>
+                <th class="py-3 px-3 font-medium text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody
+              id="history-body"
+              class="divide-y divide-slate-800/80 text-slate-300"
+            >
+              <tr>
+                <td colspan="5" class="py-6 text-center text-slate-600">
+                  加载中…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- 区域 C：花费账单 -->
+    <main id="panel-billing" class="hidden max-w-6xl mx-auto px-6 py-10">
+      <section
+        class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-6"
+      >
+        <h2
+          class="text-lg font-semibold text-amber-300 mb-4 flex items-center gap-2"
+        >
+          <span class="w-1.5 h-5 bg-amber-400 rounded-full"></span>花费账单
+        </h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div
+            class="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-6"
+          >
+            <p class="text-sm text-amber-200">今日总花费</p>
+            <p
+              id="billing-cost"
+              class="mt-2 font-mono text-3xl font-bold text-amber-300"
+            >
+              ¥ 0.000000
+            </p>
+          </div>
+          <div
+            class="rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-500/15 to-cyan-500/10 p-6"
+          >
+            <p class="text-sm text-indigo-200">今日总 Token</p>
+            <p
+              id="billing-tokens"
+              class="mt-2 font-mono text-3xl font-bold text-indigo-300"
+            >
+              0
+            </p>
+          </div>
+        </div>
+        <p class="mt-4 text-xs text-slate-500">
+          统计日期：<span id="billing-date">—</span>
+        </p>
+      </section>
+    </main>
+
+    <!-- 详情弹窗 -->
+    <div
+      id="detail-modal"
+      class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4"
+    >
+      <div
+        class="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+      >
+        <div
+          class="flex items-start justify-between border-b border-slate-800 px-6 py-4"
+        >
+          <div>
+            <h2 class="text-lg font-semibold text-cyan-300">检测详情</h2>
+            <p id="detail-time" class="mt-1 text-xs text-slate-500">—</p>
+          </div>
+          <button
+            id="detail-close"
+            type="button"
+            class="rounded-lg border border-slate-700 px-3 py-1 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+          >
+            ✕ 关闭
+          </button>
+        </div>
+
+        <div class="grid gap-6 p-6 md:grid-cols-2">
+          <!-- 左侧：原图 + 结果图 -->
+          <div class="space-y-4">
+            <div>
+              <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
+                原图
+              </p>
+              <div
+                class="flex min-h-[160px] items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70"
+              >
+                <img
+                  id="detail-original"
+                  class="hidden max-h-[240px] w-auto object-contain"
+                  alt="原图"
+                />
+                <video
+                  id="detail-original-video"
+                  controls
+                  playsinline
+                  webkit-playsinline
+                  class="hidden max-h-[240px] w-auto object-contain"
+                ></video>
+                <span class="detail-empty text-sm text-slate-600">无原图</span>
+              </div>
+            </div>
+            <div>
+              <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
+                结果图
+              </p>
+              <div
+                class="flex min-h-[160px] items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-slate-950/70"
+              >
+                <img
+                  id="detail-result"
+                  class="hidden max-h-[240px] w-auto object-contain"
+                  alt="结果图"
+                />
+                <video
+                  id="detail-result-video"
+                  controls
+                  playsinline
+                  webkit-playsinline
+                  class="hidden max-h-[240px] w-auto object-contain"
+                ></video>
+                <span class="detail-empty text-sm text-slate-600"
+                  >无结果图</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧：检测信息 + 解释 + 花费 -->
+          <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div
+                class="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+              >
+                <p class="text-xs text-slate-500">检测类别</p>
+                <p id="detail-classes" class="mt-1 text-sm text-cyan-300">—</p>
+              </div>
+              <div
+                class="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+              >
+                <p class="text-xs text-slate-500">置信度</p>
+                <p
+                  id="detail-confidence"
+                  class="mt-1 font-mono text-sm text-indigo-300"
+                >
+                  —
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <p class="mb-2 text-xs uppercase tracking-wider text-slate-500">
+                大模型解释
+              </p>
+              <div
+                id="detail-explanation"
+                class="min-h-[140px] whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-relaxed text-slate-300"
+              >
+                加载中…
+              </div>
+            </div>
+
+            <div
+              class="flex items-center justify-between rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/10 p-4"
+            >
+              <span class="text-sm text-amber-200">💳 本次花费</span>
+              <span class="font-mono text-amber-300">
+                <span id="detail-cost">¥ 0.000000</span>
+                <span id="detail-tokens" class="ml-3 text-xs text-amber-200/70"
+                  >0 tokens</span
+                >
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
-        const form = document.getElementById("infer-form");
-        const runBtn = document.getElementById("run-btn");
-        const statusEl = document.getElementById("status");
-        const classesEl = document.getElementById("classes");
-        const previewEl = document.getElementById("preview");
-        const previewTip = document.getElementById("preview-tip");
-        const explanationEl = document.getElementById("explanation");
-        const csrfToken = form.querySelector("input[name='csrfmiddlewaretoken']").value;
-        // 当前这次推理对应的数据库记录 id，保证解释能精确写回同一条记录
-        let currentRecordId = null;
+      const form = document.getElementById("infer-form");
+      const runBtn = document.getElementById("run-btn");
+      const statusEl = document.getElementById("status");
+      const classesEl = document.getElementById("classes");
+      const previewEl = document.getElementById("preview");
+      const previewVideo = document.getElementById("preview-video");
+      const previewTip = document.getElementById("preview-tip");
+      const explanationEl = document.getElementById("explanation");
+      const costValueEl = document.getElementById("cost-value");
+      const todayCostEl = document.getElementById("today-cost");
+      const csrfToken = form.querySelector(
+        "input[name='csrfmiddlewaretoken']",
+      ).value;
+      const historyBody = document.getElementById("history-body");
+      const billingCostEl = document.getElementById("billing-cost");
+      const billingTokensEl = document.getElementById("billing-tokens");
+      const billingDateEl = document.getElementById("billing-date");
 
-        // 选择文件后本地预览
-        form.image.addEventListener("change", () => {
-            const file = form.image.files[0];
-            if (!file) return;
-            previewEl.src = URL.createObjectURL(file);
-            previewEl.classList.remove("hidden");
-            previewTip.classList.add("hidden");
+      // 读取历史记录 + 今日花费/Token 汇总（区域 B、C 与顶部徽标共用一份数据）
+      async function refreshHistory() {
+        try {
+          const resp = await fetch("{% url 'api_history' %}");
+          const data = await resp.json();
+          const rows = data.records || [];
+
+          historyBody.innerHTML = "";
+          if (!rows.length) {
+            const tr = document.createElement("tr");
+            const td = document.createElement("td");
+            td.colSpan = 5;
+            td.className = "py-6 text-center text-slate-600";
+            td.textContent = "暂无推理记录";
+            tr.appendChild(td);
+            historyBody.appendChild(tr);
+          }
+          rows.forEach((row) => {
+            const tr = document.createElement("tr");
+            const cells = [
+              row.time,
+              row.classes,
+              Number(row.confidence || 0).toFixed(3),
+              `¥ ${Number(row.cost || 0).toFixed(6)}`,
+            ];
+            cells.forEach((text) => {
+              const td = document.createElement("td");
+              td.className = "py-3 px-3";
+              td.textContent = text;
+              tr.appendChild(td);
+            });
+
+            // 操作列：查看详情
+            const actionTd = document.createElement("td");
+            actionTd.className = "py-3 px-3 text-right";
+            const detailBtn = document.createElement("button");
+            detailBtn.type = "button";
+            detailBtn.className =
+              "detail-btn rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/20 transition";
+            detailBtn.dataset.id = row.id;
+            detailBtn.textContent = "🔍 查看详情";
+            actionTd.appendChild(detailBtn);
+            tr.appendChild(actionTd);
+
+            historyBody.appendChild(tr);
+          });
+
+          const today = data.today || {};
+          const totalCost = Number(today.total_cost || 0);
+          billingCostEl.textContent = `¥ ${totalCost.toFixed(6)}`;
+          billingTokensEl.textContent = Number(
+            today.total_tokens || 0,
+          ).toLocaleString();
+          billingDateEl.textContent = today.date || "—";
+          todayCostEl.textContent = `今日花费 ¥ ${totalCost.toFixed(6)}`;
+        } catch (error) {
+          console.warn("读取历史记录失败", error);
+        }
+      }
+      refreshHistory();
+
+      // 顶部三个按钮切换面板显隐（默认只显示推理面板）
+      const tabButtons = document.querySelectorAll(".tab-btn");
+      tabButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = btn.dataset.panel;
+          tabButtons.forEach((item) => {
+            document.getElementById(item.dataset.panel).classList.add("hidden");
+            item.classList.toggle("tab-active", item === btn);
+          });
+          document.getElementById(target).classList.remove("hidden");
+          refreshHistory();
         });
+      });
 
-        form.addEventListener("submit", async (event) => {
-            event.preventDefault();
-            runBtn.disabled = true;
-            runBtn.textContent = "推理中…";
-            statusEl.textContent = "正在提交图像…";
-            explanationEl.textContent = "等待模型返回解释…";
+      // 详情弹窗：点击“查看详情”后请求 /api/record/<id>/ 并填充
+      const detailModal = document.getElementById("detail-modal");
+      const detailUrl = "{% url 'api_record_detail' record_id=0 %}";
+      const detailTimeEl = document.getElementById("detail-time");
+      const detailClassesEl = document.getElementById("detail-classes");
+      const detailConfidenceEl = document.getElementById("detail-confidence");
+      const detailExplanationEl = document.getElementById("detail-explanation");
+      const detailCostEl = document.getElementById("detail-cost");
+      const detailTokensEl = document.getElementById("detail-tokens");
+      const detailOriginalImg = document.getElementById("detail-original");
+      const detailOriginalVideo = document.getElementById(
+        "detail-original-video",
+      );
+      const detailResultImg = document.getElementById("detail-result");
+      const detailResultVideo = document.getElementById("detail-result-video");
 
-            try {
-                // 1. 上传图片，调用推理接口
-                const formData = new FormData(form);
-                const inferResp = await fetch("{% url 'api_infer' %}", {
-                    method: "POST",
-                    headers: { "X-CSRFToken": csrfToken },
-                    body: formData,
-                });
-                const inferData = await inferResp.json();
+      // 图片 / 视频共用一套展示逻辑（视频记录的结果是 mp4）
+      function setDetailMedia(imgEl, videoEl, url, emptyText) {
+        const emptyEl = imgEl.parentElement.querySelector(".detail-empty");
+        imgEl.classList.add("hidden");
+        videoEl.classList.add("hidden");
+        imgEl.removeAttribute("src");
+        videoEl.removeAttribute("src");
+        emptyEl.classList.add("hidden");
+        if (!url) {
+          emptyEl.textContent = emptyText;
+          emptyEl.classList.remove("hidden");
+          return;
+        }
+        if (VIDEO_PATTERN.test(url)) {
+          videoEl.src = url;
+          videoEl.classList.remove("hidden");
+        } else {
+          imgEl.src = url;
+          imgEl.classList.remove("hidden");
+        }
+      }
 
-                if (inferData.status !== "success") {
-                    throw new Error(inferData.message || "推理失败");
-                }
+      async function openRecordDetail(recordId) {
+        detailModal.classList.remove("hidden");
+        detailModal.style.display = "flex";
+        detailExplanationEl.textContent = "加载中…";
+        try {
+          const resp = await fetch(detailUrl.replace("/0/", `/${recordId}/`));
+          const data = await resp.json();
+          if (data.status !== "success") {
+            throw new Error(data.message || "加载失败");
+          }
+          detailTimeEl.textContent = data.created_at || "—";
+          detailClassesEl.textContent = data.detected_classes || "—";
+          detailConfidenceEl.textContent = Number(data.confidence || 0).toFixed(
+            3,
+          );
+          detailExplanationEl.textContent =
+            data.llm_explanation || "该记录暂无大模型解释";
+          detailCostEl.textContent = `¥ ${Number(data.llm_cost || 0).toFixed(6)}`;
+          detailTokensEl.textContent = `${Number(
+            data.total_tokens || 0,
+          ).toLocaleString()} tokens`;
+          setDetailMedia(
+            detailOriginalImg,
+            detailOriginalVideo,
+            data.original_img,
+            "无原图",
+          );
+          setDetailMedia(
+            detailResultImg,
+            detailResultVideo,
+            data.result_img,
+            "无结果图",
+          );
+        } catch (error) {
+          detailExplanationEl.textContent = "加载失败：" + error.message;
+        }
+      }
 
-                // 2. 更新结果图与类别
-                currentRecordId = inferData.record_id;
-                previewEl.src = inferData.result_img_url;
-                previewEl.classList.remove("hidden");
-                previewTip.classList.add("hidden");
-                classesEl.textContent = inferData.classes || "—";
-                statusEl.textContent = "推理完成，正在生成解释…";
-
-                // 3. 调用解释接口
-                const explainResp = await fetch("{% url 'api_explain' %}", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": csrfToken,
-                    },
-                    body: JSON.stringify({
-                        classes: inferData.classes,
-                        record_id: currentRecordId,
-                    }),
-                });
-                const explainData = await explainResp.json();
-                explanationEl.textContent = explainData.explanation || "暂无解释";
-                statusEl.textContent = "任务完成";
-            } catch (error) {
-                statusEl.textContent = "任务失败：" + error.message;
-                explanationEl.textContent = "请检查服务端日志后重试。";
-            } finally {
-                runBtn.disabled = false;
-                runBtn.textContent = "开始推理";
-            }
+      function closeRecordDetail() {
+        [detailOriginalVideo, detailResultVideo].forEach((video) => {
+          video.pause();
+          video.removeAttribute("src");
         });
+        detailModal.style.display = "none";
+        detailModal.classList.add("hidden");
+      }
+
+      historyBody.addEventListener("click", (event) => {
+        const btn = event.target.closest(".detail-btn");
+        if (btn) openRecordDetail(btn.dataset.id);
+      });
+      document
+        .getElementById("detail-close")
+        .addEventListener("click", closeRecordDetail);
+      detailModal.addEventListener("click", (event) => {
+        if (event.target === detailModal) closeRecordDetail();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && detailModal.style.display === "flex") {
+          closeRecordDetail();
+        }
+      });
+
+      // 当前这次推理对应的数据库记录 id，保证解释能精确写回同一条记录
+      let currentRecordId = null;
+      const VIDEO_PATTERN = /\.(mp4|avi|mov|mkv|webm|m4v|flv)$/i;
+
+      function isVideoFile(file) {
+        return (
+          !!file &&
+          (file.type.startsWith("video/") || VIDEO_PATTERN.test(file.name))
+        );
+      }
+
+      function showVideo(src) {
+        previewEl.classList.add("hidden");
+        previewEl.removeAttribute("src");
+        previewVideo.src = src;
+        previewVideo.classList.remove("hidden");
+      }
+
+      function showImage(src) {
+        previewVideo.classList.add("hidden");
+        previewVideo.removeAttribute("src");
+        previewEl.src = src;
+        previewEl.classList.remove("hidden");
+      }
+
+      // 选择文件后本地预览（图片走 <img>，视频走 <video>）
+      form.image.addEventListener("change", () => {
+        const file = form.image.files[0];
+        if (!file) return;
+        const objectUrl = URL.createObjectURL(file);
+        if (isVideoFile(file)) {
+          showVideo(objectUrl);
+        } else {
+          showImage(objectUrl);
+        }
+        previewTip.classList.add("hidden");
+      });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const videoTask = isVideoFile(form.image.files[0]);
+        runBtn.disabled = true;
+        runBtn.textContent = videoTask ? "视频处理中…" : "推理中…";
+        statusEl.textContent = videoTask
+          ? "正在处理视频，请稍候…（耗时随视频时长增加，请勿关闭页面）"
+          : "正在提交图片并推理…";
+        explanationEl.textContent = "等待模型返回解释…";
+        costValueEl.textContent = "0.000000";
+
+        try {
+          // 1. 上传图片/视频，调用推理接口
+          const formData = new FormData(form);
+          const inferResp = await fetch("{% url 'api_infer' %}", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrfToken },
+            body: formData,
+          });
+          const inferData = await inferResp.json();
+
+          if (inferData.status !== "success") {
+            throw new Error(inferData.message || "推理失败");
+          }
+
+          // 2. 更新结果预览与类别
+          currentRecordId = inferData.record_id;
+          if (inferData.result_video_url) {
+            showVideo(inferData.result_video_url);
+          } else {
+            showImage(inferData.result_img_url);
+          }
+          previewTip.classList.add("hidden");
+          classesEl.textContent = inferData.classes || "—";
+          statusEl.textContent = "推理完成，正在生成解释…";
+
+          // 3. 调用解释接口（带上 record_id，严格一一对应）
+          const explainResp = await fetch("{% url 'api_explain' %}", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": csrfToken,
+            },
+            body: JSON.stringify({
+              classes: inferData.classes,
+              class_counts: inferData.class_counts,
+              record_id: currentRecordId,
+            }),
+          });
+          const explainData = await explainResp.json();
+          explanationEl.textContent =
+            explainData.explanation || explainData.message || "暂无解释";
+          costValueEl.textContent = Number(explainData.cost || 0).toFixed(6);
+          refreshHistory();
+          if (explainData.status === "success") {
+            statusEl.textContent =
+              "任务完成" +
+              (inferData.infer_time
+                ? `（推理耗时 ${inferData.infer_time} 秒）`
+                : "");
+          } else {
+            statusEl.textContent = "推理完成，但解释生成失败";
+          }
+        } catch (error) {
+          statusEl.textContent = "任务失败：" + error.message;
+          explanationEl.textContent = "请检查服务端日志后重试。";
+        } finally {
+          runBtn.disabled = false;
+          runBtn.textContent = "开始推理";
+        }
+      });
     </script>
-</body>
+  </body>
 </html>
