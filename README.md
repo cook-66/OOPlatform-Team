@@ -1,71 +1,73 @@
-ODPlatform 🚀
-ODPlatform 是一个专为计算机视觉（CV）任务打造的工业级、可插拔开发平台。它涵盖了从数据流水线、运行配置、模型训练到多线程实时推理的全生命周期管理。
+# ODPlatform · 水下智能视觉中枢 🌊
 
-本项目采用标准的 Monorepo 架构，以极高的工程素养解决了 AI 落地过程中的脏数据、配置混乱和推理性能瓶颈问题。
+**ODPlatform** 是一个工业级、全栈闭环的水下目标检测与生态分析平台。系统涵盖了从**数据流水线、模型训练、大模型智能研判到成本控制（FinOps）**的全生命周期管理。
 
-✨ 核心特性
-📦 统一配置 (D5)：基于 Pydantic v2 的三源合并配置（CLI > YAML > Default），附带完整的参数溯源链。
+本项目采用标准的 Monorepo 架构，以极高的工程素养解决了 AI 落地过程中的脏数据、模型泛化、前后端解耦以及 API 调用成本黑盒等痛点。
 
-🏭 数据流水线 (D3)：一键将 VOC/COCO/YOLO 格式转换为标准训练集，支持智能分层划分、保留来源官方划分，并生成覆盖图片与标签的数据指纹。
+## ✨ 核心特性
 
-🛡️ 数据质检 (D4)：16 项工业级数据体检（如损坏图片、出界框、孤儿标签、数据泄漏），确保错误数据被准确拦截。
+- 🏭 **自动化数据流水线 (D3/D4)**：支持 COU/Brackish 等复杂水下数据集的自动清洗、智能分层划分。内置 15 项工业级数据质检，生成防篡改的数据指纹，确保“带病数据”绝不进模型。
+- 🎯 **高精度模型训练 (D5/D6)**：深度集成 YOLO11s，支持动态配置超参数（通过 Pydantic 实现三源合并）。带有完整的训练审计与指标回溯，最终模型精度（mAP50）高达 **94.2%**。
+- 🧠 **多模态智能研判 (D7/D8)**：Web 调度中心内嵌 DeepSeek 大模型。YOLO 识别出目标后，大模型会自动根据水下生态的上下文，生成专业的巡检与生态分析报告。
+- 💳 **FinOps 商业级计费 (Web 端)**：系统自动追踪每一次大模型调用的 Token 消耗，并实时计算预估费用入库。支持今日花费汇总与历史账单查询，让 AI 成本彻底透明。
+- 🖥️ **现代化 Web 调度中心 (Django + Tailwind)**：基于 Django 构建核心枢纽，前端采用 TailwindCSS 打造深色科技风控制台。支持图片/视频双模态上传、实时推理、历史记录追踪与数据看板展示，完全前后端分离。
 
-🎯 模型训练 (D6)：基于数据流转卡（Lineage Stamp）的审计训练链路，自动记录环境快照与参数血缘。
+## 🛠️ 环境准备
 
-⚡ 实时推理引擎 (D7)：四级多线程流水线（采集 -> 推理 -> 渲染 -> 显示），主线程零阻塞。内置 5 维 FPS 监控和 HUD 面板，支持断线重连与程序化取消。
-
-🧩 可插拔帧源 (frame_source)：统一摄像头、视频流、本地图片目录的读取接口，支持极高的扩展性。
-
-🛠️ 环境准备
 推荐使用虚拟环境进行开发：
 
-bash
+```bash
 python -m venv .venv
-source .venv/bin/activate # Windows 下使用 .venv\Scripts\activate
+source .venv/bin/activate  # Windows 下使用 .venv\Scripts\activate
+
+# 安装核心引擎及开发依赖
 pip install -e "./apps/platform[dev]"
-🚀 快速开始 (CLI 命令一览)
-本项目基于 hatchling 打包，安装后会在环境中注册以下核心命令：
 
-命令 功能说明
-odp-init 初始化工作区目录结构（包含共享数据、模型与私有配置目录）。
-odp-reset 安全重置。清理运行时产物（默认 dry-run 模式防误触）。
-odp-transform 数据格式转换、清洗、以及智能划分。
-odp-validate 对 D3 产出的数据集进行 16 项严格质检。
-odp-gen-config 从 Pydantic 反射生成带详细注释的 YAML 配置模板。
-odp-train 启动 YOLO 模型训练并生成完整的审计快照。
-odp-infer 启动多线程实时推理（支持图片、视频、摄像头）。
-一个典型的端到端工作流：
+# 安装 Web 后端依赖
+pip install django pillow openai
+🚀 快速启动
+本项目分为底层算法引擎和 Web 调度中心两部分。
+
+1. 启动 Web 调度中心 (前端 + 后端)
 bash
+cd apps/odp_manage
+# 配置大模型 API Key
+$env:LLM_API_KEY="sk-你的DeepSeek_Key"
 
-# 1. 转换并清洗数据
+# 数据库迁移并启动
+python manage.py migrate
+python manage.py runserver
+访问 http://127.0.0.1:8000/ 即可进入 Web 控制台。
 
-odp-transform --dataset coco8 --format yolo --classes person bicycle car
+2. 执行数据流水线与模型训练 (底层引擎)
+bash
+# 洗数据
+odp-transform --dataset cou_raw --format yolo
 
-# 2. 数据质量检查
+# 跑质检
+odp-validate apps/platform/configs/datasets/cou_raw.yaml
 
-odp-validate apps/platform/configs/datasets/coco8.yaml
-
-# 3. 开始模型训练
-
-odp-train --data coco8 --epochs 50 --batch 16
-
-# 4. 使用本地摄像头进行实时推理 (会弹出 GUI 和 HUD 面板)
-
-odp-infer --source 0 --show
-📂 目录结构
+# 开启 GPU 炼丹 (支持自定义参数)
+odp-train --data cou_raw --model yolo11s.pt --epochs 100 --batch 0.8 --imgsz 640 --device 0
+📂 核心目录结构
 text
-ODPlatform/
+OOPlatform-Team/
 ├── apps/
-│ └── platform/ # 核心引擎 (od_platform 包)
-│ ├── configs/ # 数据集与运行配置
-│ ├── src/ # 核心源码 (包含 data_pipeline, inference 等)
-│ └── tests/ # 单元测试与集成测试
-├── data/ # 数据仓库 (raw 为只读，processed 为产物)
-├── models/ # 模型权重 (pretrained 与 trained 分离)
-├── runs/ # 运行现场日志与审计快照
+│   ├── platform/             # 核心算法引擎 (od_platform)
+│   │   ├── src/              # 包含 data_pipeline, inference, training 等
+│   │   └── configs/          # 数据集与运行配置
+│   ├── odp_manage/           # Web 调度中心 (Django)
+│   │   ├── platform_web/     # MVT 业务逻辑 (包含计费、推理路由)
+│   │   └── templates/        # TailwindCSS 前端界面
+│   └── web-backend/          # (旧版) FastAPI 实时推流服务
+├── data/                     # 数据仓库 (raw 为只读，processed 为产物)
+├── models/                   # 模型权重 (pretrained 与 trained 分离)
+├── runs/                     # 运行现场日志与审计快照
 └── README.md
-📜 架构与设计哲学
-本项目严格遵循 “生产材料”与“审计材料”分离、“幂等性” 与 “永不抛异常（长跑服务）” 等企业级原则。
-详细的架构演进与设计决策，请参阅 docs/architecture/ 下的 ADR 文档。
+🎓 架构与设计哲学
+流转卡与数据指纹：每一批数据都有唯一的指纹，训练前必须通过 D4 核验，杜绝使用脏数据。
 
-Built with ❤️ by ODPlatform Team
+环境隔离与资产分离：模型权重与数据集不进入 Git 仓库，代码与运行现场（runs/）严格隔离。
+
+全局单例与防崩溃：Web 后端对模型加载采用单例模式，大模型接口全面捕获异常并提供降级兜底，保证长跑服务“永不抛异常”。
+```
