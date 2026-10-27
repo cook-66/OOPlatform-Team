@@ -100,105 +100,211 @@
 
       <main class="max-w-7xl mx-auto w-full px-6 py-8 flex-1">
         <!-- ==================== 1. 项目介绍 ==================== -->
-        <section v-if="currentTab === 'intro'" class="space-y-8">
+        <section v-if="currentTab === 'intro'" class="space-y-6 md:space-y-8">
+          <!-- 核心愿景 -->
           <div
-            class="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur p-8 md:p-12 shadow-[0_0_60px_-20px_rgba(56,189,248,0.5)]"
+            class="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900/80 to-slate-950 px-7 py-10 md:px-14 md:py-16 shadow-[0_0_80px_-30px_rgba(56,189,248,0.45)]"
           >
-            <p class="text-xs tracking-[0.3em] text-cyan-400 uppercase">
-              Underwater AI Pipeline
+            <div
+              class="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl"
+            ></div>
+            <div
+              class="pointer-events-none absolute -bottom-40 -left-24 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl"
+            ></div>
+
+            <p class="text-[11px] uppercase tracking-[0.35em] text-cyan-400">
+              MLOps · Underwater Vision
             </p>
-            <h2
-              class="mt-3 text-3xl md:text-4xl font-bold text-white leading-tight"
+            <h1
+              class="mt-5 text-3xl font-black leading-tight text-white md:text-5xl"
             >
-              从数据到决策的<span
-                class="bg-gradient-to-r from-cyan-300 to-indigo-400 bg-clip-text text-transparent"
-                >水下视觉闭环平台</span
-              >
-            </h2>
+              ODPlatform 水下智能视觉中枢
+            </h1>
             <p
-              class="mt-5 max-w-3xl text-sm md:text-base leading-relaxed text-slate-400"
+              class="mt-4 text-base font-medium text-slate-200 md:text-xl"
             >
-              ODPlatform 面向水下目标识别场景，打通「数据治理 → 模型训练 →
-              在线推理 → 多模态语义解释 → 成本度量」全链路。底层由 YOLO11s
-              完成高精度目标检测， 上层由 DeepSeek
-              大模型生成可读的水下场景分析，Django 提供推理与计费服务， Vue 3 +
-              ECharts 构建可视化控制台，形成可审计、可度量、可扩展的 AI 闭环。
+              基于 MLOps 全链路闭环的水下小目标检测与智能研判平台
+            </p>
+            <p
+              class="mt-6 max-w-3xl text-sm leading-8 text-slate-400 md:text-base"
+            >
+              针对水下环境光线衰减、背景杂乱、小目标密集等行业痛点，本平台提供从数据清洗、模型训练、实时推理到大模型智能研判的一站式解决方案。
             </p>
 
-            <div class="mt-8 grid gap-4 sm:grid-cols-3">
-              <div
-                class="rounded-xl border border-slate-800 bg-slate-950/60 p-5"
-              >
-                <p class="text-2xl font-bold text-cyan-300">mAP50 89.7%</p>
-                <p class="mt-1 text-xs text-slate-500">best.pt 对应最佳轮次</p>
+            <div
+              class="mt-10 flex flex-wrap items-end gap-x-10 gap-y-5 border-t border-slate-800/80 pt-7"
+            >
+              <div>
+                <p class="text-2xl font-bold text-cyan-300 md:text-3xl">24 类</p>
+                <p class="mt-1 text-xs text-slate-500">水下目标与废弃物类别</p>
               </div>
-              <div
-                class="rounded-xl border border-slate-800 bg-slate-950/60 p-5"
-              >
-                <p class="text-2xl font-bold text-indigo-300">D1–D7</p>
-                <p class="mt-1 text-xs text-slate-500">全流程数据血缘与审计</p>
+              <div>
+                <p class="text-2xl font-bold text-indigo-300 md:text-3xl">
+                  mAP50 89.7%
+                </p>
+                <p class="mt-1 text-xs text-slate-500">best.pt 实测指标</p>
               </div>
-              <div
-                class="rounded-xl border border-slate-800 bg-slate-950/60 p-5"
-              >
-                <p class="text-2xl font-bold text-emerald-300">端到端</p>
-                <p class="mt-1 text-xs text-slate-500">图片 / 视频双模态推理</p>
-              </div>
-            </div>
-
-            <div class="mt-8">
-              <p class="text-xs uppercase tracking-wider text-slate-500 mb-3">
-                技术栈
-              </p>
-              <div class="flex flex-wrap gap-2 text-xs">
-                <span
-                  class="px-3 py-1.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
-                  >YOLO11s</span
+              <div>
+                <p
+                  class="text-2xl font-bold text-emerald-300 md:text-3xl"
                 >
-                <span
-                  class="px-3 py-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                  >Django</span
-                >
-                <span
-                  class="px-3 py-1.5 rounded-full border border-green-500/40 bg-green-500/10 text-green-300"
-                  >Vue 3</span
-                >
-                <span
-                  class="px-3 py-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
-                  >DeepSeek</span
-                >
-                <span
-                  class="px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-300"
-                  >ECharts</span
-                >
-                <span
-                  class="px-3 py-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 text-sky-300"
-                  >TailwindCSS</span
-                >
-                <span
-                  class="px-3 py-1.5 rounded-full border border-slate-600 bg-slate-800/60 text-slate-300"
-                  >OpenCV</span
-                >
+                  0.12 s
+                </p>
+                <p class="mt-1 text-xs text-slate-500">单图推理（模型常驻）</p>
               </div>
             </div>
           </div>
 
-          <div class="grid gap-4 md:grid-cols-2">
+          <!-- 四大核心技术优势 -->
+          <div class="grid gap-5 md:grid-cols-2">
             <div
-              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+              class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-7 transition hover:border-cyan-500/40 hover:bg-slate-900/80"
             >
-              <h3 class="text-sm font-semibold text-cyan-300">闭环能力</h3>
-              <p class="mt-2 text-sm text-slate-400 leading-relaxed">
-                数据集切分、身份核验、训练归档、推理产物与审计章一一对应，任何一次输出都可回溯到具体数据指纹与模型版本。
+              <div class="flex items-center gap-3">
+                <span
+                  class="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-lg"
+                  >🏭</span
+                >
+                <div>
+                  <h3 class="text-base font-semibold text-white">
+                    数据流水线（D3 / D4）
+                  </h3>
+                  <p class="text-[11px] uppercase tracking-widest text-slate-500">
+                    Data Engineering
+                  </p>
+                </div>
+              </div>
+              <p class="mt-4 text-sm leading-7 text-slate-400">
+                自动化格式转换与 15 项工业级数据质检，生成防篡改的数据指纹，任何一次训练都能回溯到具体数据版本。
               </p>
             </div>
+
             <div
-              class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"
+              class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-7 transition hover:border-indigo-500/40 hover:bg-slate-900/80"
             >
-              <h3 class="text-sm font-semibold text-indigo-300">商业级度量</h3>
-              <p class="mt-2 text-sm text-slate-400 leading-relaxed">
-                每次大模型调用都记录 Token
-                与预估花费，仪表盘实时汇总当日成本，让 AI 能力可计价、可运营。
+              <div class="flex items-center gap-3">
+                <span
+                  class="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-lg"
+                  >🎯</span
+                >
+                <div>
+                  <h3 class="text-base font-semibold text-white">
+                    敏捷模型训练（D5 / D6）
+                  </h3>
+                  <p class="text-[11px] uppercase tracking-widest text-slate-500">
+                    Model Training
+                  </p>
+                </div>
+              </div>
+              <p class="mt-4 text-sm leading-7 text-slate-400">
+                支持 YOLO11s 等前沿模型微调，高分辨率小目标增强，训练指标实时监控并自动归档权重与审计报告。
+              </p>
+            </div>
+
+            <div
+              class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-7 transition hover:border-emerald-500/40 hover:bg-slate-900/80"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-lg"
+                  >⚡</span
+                >
+                <div>
+                  <h3 class="text-base font-semibold text-white">
+                    多模态调度推理（D7 / Web）
+                  </h3>
+                  <p class="text-[11px] uppercase tracking-widest text-slate-500">
+                    Inference Serving
+                  </p>
+                </div>
+              </div>
+              <p class="mt-4 text-sm leading-7 text-slate-400">
+                四级多线程流水线架构，模型常驻内存，支持模型版本切换、置信度阈值动态调节与图片 / 视频双模态推理。
+              </p>
+            </div>
+
+            <div
+              class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-7 transition hover:border-violet-500/40 hover:bg-slate-900/80"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/10 text-lg"
+                  >🧠</span
+                >
+                <div>
+                  <h3 class="text-base font-semibold text-white">
+                    大模型智能研判（LLM）
+                  </h3>
+                  <p class="text-[11px] uppercase tracking-widest text-slate-500">
+                    AI Reasoning
+                  </p>
+                </div>
+              </div>
+              <p class="mt-4 text-sm leading-7 text-slate-400">
+                深度集成 DeepSeek，依据检测结果自动生成巡检报告；内置 Token 消耗与预估花费计算，让 AI 能力可计量（FinOps）。
+              </p>
+            </div>
+          </div>
+
+          <!-- 应用场景 -->
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/40 px-7 py-9">
+            <div class="flex items-baseline justify-between">
+              <h3 class="text-sm font-semibold tracking-wide text-white">
+                应用场景
+              </h3>
+              <p class="text-[11px] uppercase tracking-[0.25em] text-slate-600">
+                Use Cases
+              </p>
+            </div>
+            <div class="mt-6 grid gap-5 md:grid-cols-3">
+              <div class="rounded-xl bg-slate-950/50 p-6">
+                <p class="text-2xl">🚁</p>
+                <h4 class="mt-3 text-sm font-semibold text-cyan-300">
+                  水下机器人巡检
+                </h4>
+                <p class="mt-2 text-xs leading-6 text-slate-400">
+                  实时识别管道破损、水下设备与结构异常，降低人工下潜风险。
+                </p>
+              </div>
+              <div class="rounded-xl bg-slate-950/50 p-6">
+                <p class="text-2xl">🌊</p>
+                <h4 class="mt-3 text-sm font-semibold text-emerald-300">
+                  海洋生态监测
+                </h4>
+                <p class="mt-2 text-xs leading-6 text-slate-400">
+                  水下生物群落追踪与栖息地变化记录，为生态评估提供数据支撑。
+                </p>
+              </div>
+              <div class="rounded-xl bg-slate-950/50 p-6">
+                <p class="text-2xl">🔍</p>
+                <h4 class="mt-3 text-sm font-semibold text-indigo-300">
+                  水下目标打捞
+                </h4>
+                <p class="mt-2 text-xs leading-6 text-slate-400">
+                  定位水下废弃物与遗失装备，辅助打捞作业规划与处置。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 工程可信度 -->
+          <div class="grid gap-4 sm:grid-cols-3">
+            <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+              <p class="text-xs font-semibold text-cyan-300">可追溯</p>
+              <p class="mt-2 text-xs leading-6 text-slate-500">
+                数据指纹与审计章一一对应，输出可回溯到数据版本与模型权重。
+              </p>
+            </div>
+            <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+              <p class="text-xs font-semibold text-emerald-300">可度量</p>
+              <p class="mt-2 text-xs leading-6 text-slate-500">
+                每次推理与解释都落库，Token 与花费逐笔记录，当日成本实时汇总。
+              </p>
+            </div>
+            <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+              <p class="text-xs font-semibold text-indigo-300">可扩展</p>
+              <p class="mt-2 text-xs leading-6 text-slate-500">
+                D1–D7 模块化流水线，新增模型或数据源无需改动前端交互。
               </p>
             </div>
           </div>
