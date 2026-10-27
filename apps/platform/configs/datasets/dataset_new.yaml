@@ -1,0 +1,50 @@
+path: D:/OOPlatform-Team/data/processed/dataset_new
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: Unknown Instance
+  1: Scissors
+  2: Plastic Cup
+  3: Metal Rod
+  4: Fork
+  5: Bottle
+  6: Soda Can
+  7: Case
+  8: Plastic Bag
+  9: Cup
+  10: Goggles
+  11: Flipper
+  12: LoCo
+  13: Aqua
+  14: Pipe
+  15: Snorkel
+  16: Spoon
+  17: Lure
+  18: Screwdriver
+  19: Car
+  20: Tripod
+  21: ROV
+  22: Knife
+  23: Dive Weight
+nc: 24
+odp_meta:
+  schema_version: 1
+  dataset_name: dataset_new
+  source_format: coco
+  task: detect
+  tool_version: odp-transform/0.5
+  created_at: "2026-10-26T09:07:17"
+  contract_fingerprint: a259775a79fb527f01c8afb38948be74895ff848b995259111eb1733be3f7506
+  manifest_path: runs/data_pipeline/20261026-090717/manifest.json
+  split:
+    strategy: random
+    seed: 42
+    rates:
+      train: 0.8
+      val: 0.1
+      test: 0.1
+    counts:
+      train: 7730
+      val: 966
+      test: 967

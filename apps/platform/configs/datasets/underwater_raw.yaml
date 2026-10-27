@@ -1,0 +1,32 @@
+path: D:/OOPlatform-Team/data/processed/underwater_raw
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: crab
+  1: fish
+  2: jellyfish
+  3: shrimp
+  4: small_fish
+  5: starfish
+nc: 6
+odp_meta:
+  schema_version: 1
+  dataset_name: underwater_raw
+  source_format: yolo
+  task: detect
+  tool_version: odp-transform/0.5
+  created_at: "2026-10-24T21:01:13"
+  contract_fingerprint: a9158c8e4a9c07f723bd87e93f36f71f4eb0f5674797cf19e8da9f94c57b9092
+  manifest_path: runs/data_pipeline/20261024-210113/manifest.json
+  split:
+    strategy: random
+    seed: 42
+    rates:
+      train: 0.8
+      val: 0.1
+      test: 0.1
+    counts:
+      train: 11739
+      val: 1467
+      test: 1468
