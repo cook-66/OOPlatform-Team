@@ -79,6 +79,11 @@ temp/
 *.pkl
 *.h5
 *.npz
+# 拦截所有的模型文件（不管在哪个目录）
+*.pt 
+# 拦截你刚才新建的 weights 文件夹
+weights/ 
+
 # 工具元数据(reset/doctor 等元工具的审计日志,本地运行历史)
 .odp-meta/
 
@@ -96,3 +101,4 @@ apps/odp_manage/media/
 # 根目录下的权重文件(防止误传)
 /yolov8n.pt
 /yolo11n.pt
+/yolo11s.pt
