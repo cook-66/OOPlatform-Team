@@ -1,5 +1,7 @@
 import json
 import logging
+import mimetypes
+import os
 import re
 import sys
 import threading
@@ -10,9 +12,15 @@ from pathlib import Path
 from django.conf import settings
 from django.db.models import Count, Sum
 from django.db.models.functions import TruncDate
-from django.http import JsonResponse
+from django.http import (
+    Http404,
+    HttpResponse,
+    JsonResponse,
+    StreamingHttpResponse,
+)
 from django.shortcuts import render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import InferenceRecord
@@ -33,10 +41,19 @@ except Exception:  # noqa: BLE001 - 缺依赖时只降级，不让 Django 启动
     logger.exception("ultralytics/opencv 导入失败，推理接口暂不可用")
 
 try:
-    from od_platform.assistant.llm_service import analyze_detection
+    from od_platform.assistant.llm_service import analyze_detection, client as llm_client
 except Exception:  # noqa: BLE001
     analyze_detection = None
-    logger.exception("od_platform.assistant.llm_service 导入失败，解释接口暂不可用")
+    llm_client = None
+    logger.exception("od_platform.assistant.llm_service 导入失败，解释与对话接口暂不可用")
+
+try:
+    from openai import APIConnectionError, AuthenticationError, RateLimitError
+except Exception:  # noqa: BLE001 - openai 缺失时用占位异常，避免 except 子句失效
+    class _LLMSDKUnavailable(Exception):
+        """openai 未安装时的占位异常（正常流程不会抛出）。"""
+
+    AuthenticationError = APIConnectionError = RateLimitError = _LLMSDKUnavailable
 
 # 视频扩展名兜底（有些浏览器上传的 content_type 不可靠）
 _VIDEO_SUFFIXES = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".flv"}
@@ -209,6 +226,75 @@ def index(request):
     return render(request, "index.html")
 
 
+_RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+
+def serve_media(request, path):
+    """带 HTTP Range 支持的媒体文件服务。
+
+    Django 自带的 static() 在开发环境下不返回 206，浏览器无法分段读取 mp4（moov 在文件尾部），
+    表现为视频一直黑屏/转圈。这里手动实现单区间 Range，保证移动端与桌面浏览器都能流式播放。
+    """
+    root = Path(settings.MEDIA_ROOT).resolve()
+    target = (root / path).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError:
+        raise Http404("媒体文件不存在")
+    if not target.is_file():
+        raise Http404("媒体文件不存在")
+
+    size = target.stat().st_size
+    content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+    start, end = 0, size - 1
+    status = 200
+
+    match = _RANGE_RE.match(request.headers.get("Range", "").strip())
+    if match:
+        first, last = match.group(1), match.group(2)
+        if first == "" and last == "":
+            match = None
+        else:
+            if first == "":
+                # 后缀区间 bytes=-N：读取文件末尾 N 字节
+                start = max(size - int(last), 0)
+                end = size - 1
+            else:
+                start = int(first)
+                end = min(int(last), size - 1) if last else size - 1
+            if start > end or start >= size:
+                response = HttpResponse(status=416)
+                response["Content-Range"] = f"bytes */{size}"
+                return response
+            status = 206
+
+    length = end - start + 1
+    headers = {
+        "Content-Length": str(length),
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f'inline; filename="{target.name}"',
+    }
+    if status == 206:
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+    if request.method == "HEAD":
+        return HttpResponse(status=status, content_type=content_type, headers=headers)
+
+    def file_chunks():
+        with target.open("rb") as handle:
+            handle.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = handle.read(min(256 * 1024, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    return StreamingHttpResponse(
+        file_chunks(), status=status, content_type=content_type, headers=headers
+    )
+
+
 @require_POST
 def api_run_inference(request):
     """接收图片/视频，调用真实 YOLO 模型推理，结果落库并返回访问地址。"""
@@ -338,10 +424,50 @@ def api_generate_explanation(request):
 
     try:
         llm_result = analyze_detection(counts, conf_threshold=conf_threshold)
-    except Exception as exc:  # noqa: BLE001 - 大模型报错不能拖垮 Django
+    except AuthenticationError:
+        logger.warning("大模型鉴权失败：LLM_API_KEY 无效或已过期")
+        return JsonResponse(
+            {
+                "status": "error",
+                "error_type": "AUTH_FAILED",
+                "message": "API Key 无效或已过期，请检查配置。",
+            }
+        )
+    except RateLimitError:
+        logger.warning("大模型触发限流或额度耗尽")
+        return JsonResponse(
+            {
+                "status": "error",
+                "error_type": "RATE_LIMIT",
+                "message": "请求过于频繁，额度已耗尽。",
+            }
+        )
+    except APIConnectionError:
+        logger.warning("大模型网络连接失败或超时")
+        return JsonResponse(
+            {
+                "status": "error",
+                "error_type": "NETWORK_FAILED",
+                "message": "网络连接大模型超时，请检查网络或代理。",
+            }
+        )
+    except Exception as exc:  # noqa: BLE001 - 兜底也要返回 JSON，不能让前端拿到 HTML
         logger.exception("大模型调用失败")
-        message = f"大模型调用失败，请检查 LLM_API_KEY 或网络：{exc}"
-        return JsonResponse({"status": "error", "message": message, "explanation": message}, status=502)
+        if "API_KEY" in str(exc) or not os.getenv("LLM_API_KEY"):
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "error_type": "NO_KEY",
+                    "message": "未配置 LLM_API_KEY 环境变量，大模型功能已降级。",
+                }
+            )
+        return JsonResponse(
+            {
+                "status": "error",
+                "error_type": "UNKNOWN",
+                "message": f"大模型服务异常: {exc}",
+            }
+        )
 
     explanation = llm_result.get("text", "")
     cost = float(llm_result.get("cost", 0.0))
@@ -455,3 +581,71 @@ def api_trend(request):
         "dates": dates,
         "counts": values,
     })
+
+
+CHAT_SYSTEM_PROMPT = (
+    "你是一个水下智能视觉中枢平台的 AI 助手，请简洁专业灵活地回答用户关于系统操作、模型检测的问题。"
+    "回答要像人说的话，逻辑符合人类视觉。"
+)
+
+
+@csrf_exempt
+@require_POST
+def api_chat_assistant(request):
+    """AI 助手对话接口：SSE 流式返回，前端逐字渲染。"""
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse(
+            {"status": "error", "error_type": "BAD_REQUEST", "message": "请求体不是合法 JSON。"},
+            status=400,
+        )
+
+    question = str(payload.get("question") or "").strip()
+    if not question:
+        return JsonResponse(
+            {"status": "error", "error_type": "EMPTY_QUESTION", "message": "问题不能为空。"},
+            status=400,
+        )
+    if len(question) > 2000:
+        return JsonResponse(
+            {"status": "error", "error_type": "TOO_LONG", "message": "问题过长，请精简到 2000 字以内。"},
+            status=400,
+        )
+    if llm_client is None or not os.getenv("LLM_API_KEY"):
+        return JsonResponse(
+            {
+                "status": "error",
+                "error_type": "NO_KEY",
+                "message": "未配置 LLM_API_KEY 环境变量，AI 助手暂不可用。",
+            },
+            status=503,
+        )
+
+    def event_stream():
+        try:
+            stream = llm_client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+                    {"role": "user", "content": question},
+                ],
+                stream=True,
+                timeout=60,
+            )
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                text = chunk.choices[0].delta.content
+                if text:
+                    yield f"data: {json.dumps({'text': text}, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # noqa: BLE001 - 流里出错只能以事件形式告知前端
+            logger.exception("AI 助手流式调用失败")
+            yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+
+    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
