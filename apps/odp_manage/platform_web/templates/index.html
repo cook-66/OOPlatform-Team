@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ODPlatform · 水下智能视觉中枢</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
       body {
@@ -32,6 +32,10 @@
       [v-cloak] {
         display: none;
       }
+      /* 防止 Tailwind 的 .flex 覆盖 v-cloak，Vue 未挂载时整页先隐藏 */
+      #app[v-cloak] {
+        display: none !important;
+      }
       ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
@@ -39,6 +43,26 @@
       ::-webkit-scrollbar-thumb {
         background: #1e293b;
         border-radius: 999px;
+      }
+      /* AI 助手流式输出的闪烁光标 */
+      .chat-cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1em;
+        margin-left: 2px;
+        background: #22d3ee;
+        vertical-align: -0.15em;
+        animation: chat-blink 0.9s steps(1) infinite;
+      }
+      @keyframes chat-blink {
+        0%,
+        49% {
+          opacity: 1;
+        }
+        50%,
+        100% {
+          opacity: 0;
+        }
       }
     </style>
   </head>
@@ -790,6 +814,7 @@
               <video
                 id="preview-video"
                 controls
+                preload="metadata"
                 playsinline
                 webkit-playsinline
                 class="hidden max-h-[320px] w-auto object-contain"
@@ -1107,6 +1132,19 @@
         if (el) el.textContent = text;
       }
 
+      // 解释区两种状态：正常（灰底）与警告（黄底），用于展示大模型的具体报错原因
+      function setExplanation(text, warning) {
+        const el = $("explanation");
+        if (!el) return;
+        el.textContent = text;
+        el.classList.toggle("border-amber-500/40", !!warning);
+        el.classList.toggle("bg-amber-500/10", !!warning);
+        el.classList.toggle("text-amber-300", !!warning);
+        el.classList.toggle("border-slate-800", !warning);
+        el.classList.toggle("bg-slate-950/70", !warning);
+        el.classList.toggle("text-slate-400", !warning);
+      }
+
       function isVideoFile(file) {
         return (
           !!file &&
@@ -1114,11 +1152,23 @@
         );
       }
 
+      let videoWatchdog = null;
+
+      function clearVideoWatchdog() {
+        if (videoWatchdog) {
+          window.clearTimeout(videoWatchdog);
+          videoWatchdog = null;
+        }
+      }
+
       function resetVideoPreview() {
         const video = $("preview-video");
         const fallback = $("video-fallback");
+        clearVideoWatchdog();
         if (video) {
           video.onerror = null;
+          video.onloadedmetadata = null;
+          video.oncanplay = null;
           video.pause();
           video.removeAttribute("src");
           video.classList.add("hidden");
@@ -1130,11 +1180,14 @@
       }
 
       function showVideoFallback(src) {
+        clearVideoWatchdog();
         const video = $("preview-video");
         const fallback = $("video-fallback");
         const download = $("video-download");
         if (video) {
           video.onerror = null;
+          video.onloadedmetadata = null;
+          video.oncanplay = null;
           video.pause();
           video.removeAttribute("src");
           video.classList.add("hidden");
@@ -1161,7 +1214,18 @@
           img.removeAttribute("src");
         }
         if (!video) return;
+        let settled = false;
+        const markReady = () => {
+          settled = true;
+          clearVideoWatchdog();
+        };
         video.onerror = () => showVideoFallback(src);
+        video.onloadedmetadata = markReady;
+        video.oncanplay = markReady;
+        // 浏览器既没报错也没就绪时（大文件/传输卡住）兜底降级，避免永久转圈
+        videoWatchdog = window.setTimeout(() => {
+          if (!settled) showVideoFallback(src);
+        }, 12000);
         video.src = src;
         video.classList.remove("hidden");
       }
@@ -1356,7 +1420,7 @@
             ? "正在处理视频，请稍候…（耗时随视频时长增加，请勿关闭页面）"
             : "正在提交图片并推理…",
         );
-        setText("explanation", "等待模型返回解释…");
+        setExplanation("等待模型返回解释…", false);
         setText("cost-value", "0.000000");
 
         try {
@@ -1395,24 +1459,24 @@
             }),
           });
           const explainData = await explainResp.json();
-          setText(
-            "explanation",
-            explainData.explanation || explainData.message || "暂无解释",
-          );
-          setText("cost-value", Number(explainData.cost || 0).toFixed(6));
-          refreshHistory();
-          setText(
-            "status",
-            explainData.status === "success"
-              ? "任务完成" +
-                  (inferData.infer_time
-                    ? `（推理耗时 ${inferData.infer_time} 秒）`
-                    : "")
-              : "推理完成，但解释生成失败",
-          );
+          if (explainData.status === "success") {
+            setExplanation(explainData.explanation || "暂无解释", false);
+            setText("cost-value", Number(explainData.cost || 0).toFixed(6));
+            refreshHistory();
+            setText(
+              "status",
+              "任务完成" +
+                (inferData.infer_time
+                  ? `（推理耗时 ${inferData.infer_time} 秒）`
+                  : ""),
+            );
+          } else {
+            setExplanation("⚠️ " + (explainData.message || "大模型解释失败"), true);
+            setText("status", "推理完成，但解释生成失败");
+          }
         } catch (error) {
           setText("status", "任务失败：" + error.message);
-          setText("explanation", "请检查服务端日志后重试。");
+          setExplanation("⚠️ " + error.message, true);
         } finally {
           const btn = $("run-btn");
           if (btn) {
@@ -1708,35 +1772,272 @@
       });
 
       // ===== Vue：五大模块切换 =====
-      const { createApp } = Vue;
-      createApp({
-        data() {
-          return {
-            currentTab: "infer",
-            tabs: [
-              { key: "intro", label: "📖 项目介绍" },
-              { key: "data", label: "📊 数据理解" },
-              { key: "train", label: "⚙️ 模型训练" },
-              { key: "infer", label: "🎯 模型推理" },
-              { key: "dashboard", label: "💳 推理概览" },
-            ],
-          };
-        },
-        watch: {
-          currentTab(value) {
-            if (value === "data") {
-              this.$nextTick(() => {
-                initDataBarChart();
-              });
-            }
-            if (value === "dashboard") {
-              this.$nextTick(() => {
-                refreshDashboard();
-              });
-            }
+      function mountVueApp() {
+        if (!window.Vue || !window.Vue.createApp) return false;
+        const { createApp } = window.Vue;
+        createApp({
+          data() {
+            return {
+              currentTab: "infer",
+              tabs: [
+                { key: "intro", label: "📖 项目介绍" },
+                { key: "data", label: "📊 数据理解" },
+                { key: "train", label: "⚙️ 模型训练" },
+                { key: "infer", label: "🎯 模型推理" },
+                { key: "dashboard", label: "💳 推理概览" },
+              ],
+            };
           },
-        },
-      }).mount("#app");
+          watch: {
+            currentTab(value) {
+              if (value === "data") {
+                this.$nextTick(() => {
+                  initDataBarChart();
+                });
+              }
+              if (value === "dashboard") {
+                this.$nextTick(() => {
+                  refreshDashboard();
+                });
+              }
+            },
+          },
+        }).mount("#app");
+        return true;
+      }
+
+      // 主 CDN 不可达时，依次尝试备用源；全部失败才提示，避免整页 v-if 失效变成"全部堆在一页"
+      (function bootstrapVue() {
+        if (mountVueApp()) return;
+        const fallbacks = [
+          "https://cdn.bootcdn.net/ajax/libs/vue/3.4.38/vue.global.prod.js",
+          "https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js",
+        ];
+        let index = 0;
+        const tryNext = () => {
+          if (index >= fallbacks.length) {
+            const tip = document.createElement("div");
+            tip.className =
+              "fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-amber-500/40 bg-slate-900/95 px-6 py-4 text-sm text-amber-300 shadow-xl";
+            tip.textContent =
+              "界面框架（Vue）加载失败，请检查网络后刷新页面。";
+            document.body.appendChild(tip);
+            return;
+          }
+          const script = document.createElement("script");
+          script.src = fallbacks[index++];
+          script.onload = () => {
+            if (!mountVueApp()) tryNext();
+          };
+          script.onerror = tryNext;
+          document.head.appendChild(script);
+        };
+        tryNext();
+      })();
+    </script>
+
+    <!-- ===== AI 智能助手悬浮窗 ===== -->
+    <div
+      id="chat-widget"
+      class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3"
+    >
+      <section
+        id="chat-panel"
+        class="hidden h-96 w-80 flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl shadow-cyan-500/10"
+      >
+        <header
+          class="flex items-center justify-between border-b border-slate-800 px-4 py-3"
+        >
+          <div class="flex items-center gap-2">
+            <span class="text-lg leading-none">🤖</span>
+            <span class="text-sm font-semibold tracking-wide text-slate-100">智能助手</span>
+            <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-300">在线</span>
+          </div>
+          <button
+            id="chat-close"
+            type="button"
+            aria-label="关闭助手"
+            class="rounded-lg px-2 py-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+          >✕</button>
+        </header>
+        <div
+          id="chat-messages"
+          class="flex-1 space-y-3 overflow-y-auto px-3 py-3 text-sm"
+        ></div>
+        <div class="flex items-center gap-2 border-t border-slate-800 p-2">
+          <input
+            id="chat-input"
+            type="text"
+            autocomplete="off"
+            maxlength="2000"
+            placeholder="问问检测结果或平台操作…"
+            class="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none"
+          />
+          <button
+            id="chat-send"
+            type="button"
+            class="shrink-0 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >发送</button>
+        </div>
+      </section>
+      <button
+        id="chat-fab"
+        type="button"
+        aria-label="打开 AI 智能助手"
+        class="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 text-2xl shadow-lg shadow-cyan-500/30 transition hover:scale-105"
+      >🤖</button>
+    </div>
+
+    <script>
+      // ===== AI 智能助手：SSE 流式对话 + 打字机渲染 =====
+      (function () {
+        const fab = document.getElementById("chat-fab");
+        const panel = document.getElementById("chat-panel");
+        const closeBtn = document.getElementById("chat-close");
+        const messages = document.getElementById("chat-messages");
+        const input = document.getElementById("chat-input");
+        const sendBtn = document.getElementById("chat-send");
+        if (!fab || !panel || !messages || !input || !sendBtn) return;
+
+        const WELCOME =
+          "你好，我是 ODPlatform 智能助手。可以问我平台操作、检测结果或类别含义。";
+        let streaming = false;
+        let booted = false;
+
+        function scrollToBottom() {
+          messages.scrollTop = messages.scrollHeight;
+        }
+
+        function appendMessage(text, role) {
+          const bubble = document.createElement("div");
+          const base =
+            "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 leading-relaxed";
+          bubble.className =
+            role === "user"
+              ? `${base} ml-auto rounded-br-sm bg-blue-600 text-white`
+              : `${base} mr-auto rounded-bl-sm bg-slate-800 text-slate-100`;
+          bubble.textContent = text;
+          messages.appendChild(bubble);
+          scrollToBottom();
+          return bubble;
+        }
+
+        function openPanel() {
+          panel.classList.remove("hidden");
+          panel.classList.add("flex");
+          if (!booted) {
+            appendMessage(WELCOME, "assistant");
+            booted = true;
+          }
+          window.setTimeout(() => input.focus(), 50);
+        }
+
+        function closePanel() {
+          panel.classList.add("hidden");
+          panel.classList.remove("flex");
+        }
+
+        function setSending(state) {
+          streaming = state;
+          sendBtn.disabled = state;
+          input.disabled = state;
+          sendBtn.textContent = state ? "生成中" : "发送";
+        }
+
+        async function sendQuestion() {
+          const question = input.value.trim();
+          if (!question || streaming) return;
+          input.value = "";
+          appendMessage(question, "user");
+
+          const bubble = appendMessage("思考中...", "assistant");
+          const cursor = document.createElement("span");
+          cursor.className = "chat-cursor";
+          let started = false;
+
+          setSending(true);
+          try {
+            const resp = await fetch("{% url 'api_chat' %}", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ question }),
+            });
+
+            if (!resp.ok) {
+              let detail = `HTTP ${resp.status}`;
+              try {
+                const data = await resp.json();
+                detail = data.message || detail;
+              } catch (_) {
+                /* 非 JSON 响应，保留状态码 */
+              }
+              throw new Error(detail);
+            }
+            if (!resp.body) throw new Error("当前浏览器不支持流式读取");
+
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const events = buffer.split("\n\n");
+              buffer = events.pop() || "";
+              for (const event of events) {
+                const line = event.trim();
+                if (!line.startsWith("data:")) continue;
+                const payload = line.slice(5).trim();
+                if (payload === "[DONE]") continue;
+                let data;
+                try {
+                  data = JSON.parse(payload);
+                } catch (_) {
+                  continue;
+                }
+                if (data.error) throw new Error(data.error);
+                if (!data.text) continue;
+                if (!started) {
+                  started = true;
+                  bubble.textContent = "";
+                  bubble.appendChild(cursor);
+                }
+                bubble.insertBefore(
+                  document.createTextNode(data.text),
+                  cursor,
+                );
+                scrollToBottom();
+              }
+            }
+
+            if (!started) bubble.textContent = "（助手没有返回内容）";
+            else cursor.remove();
+          } catch (error) {
+            bubble.textContent = "⚠️ " + error.message;
+          } finally {
+            setSending(false);
+            scrollToBottom();
+          }
+        }
+
+        fab.addEventListener("click", () => {
+          const isOpen = !panel.classList.contains("hidden");
+          if (isOpen) closePanel();
+          else openPanel();
+        });
+        closeBtn.addEventListener("click", closePanel);
+        sendBtn.addEventListener("click", sendQuestion);
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            sendQuestion();
+          }
+        });
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") closePanel();
+        });
+      })();
     </script>
   </body>
 </html>

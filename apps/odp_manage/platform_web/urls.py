@@ -10,4 +10,5 @@ urlpatterns = [
     path('api/history/', views.api_history, name="api_history"),
     path('api/trend/', views.api_trend, name="api_trend"),
     path('api/record/<int:record_id>/', views.api_record_detail, name="api_record_detail"),
+    path('api/chat/', views.api_chat_assistant, name="api_chat"),
 ]
