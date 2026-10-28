@@ -30,38 +30,35 @@ BILLING_FILE = "billing_records.json"
 # 修改点 1：将原本生硬的“防呆”，升级为“海洋专家+科普”人设（但依然不许瞎编）
 # 水下垃圾/人造物解释的防呆系统提示词
 GUARDRAIL_PROMPT = (
-    "你是一位资深的海洋环境工程专家与水下污染治理研究员。"
-    "你的任务是根据视觉检测系统识别出的水下人造物（垃圾），进行专业的分类确认与生态危害评估。"
-    "如果检测结果的置信度很低，或者信息不足，请明确表达不确定性。不要编造画面中没有的细节。"
+    "你是一位亲切、专业的海洋环保科普向导。"
+    "你的任务是把枯燥的视觉检测数据，转化为一段自然、流畅、有温度的口语化讲解。"
+    "不要过度推测画面中不存在的信息，结合常识进行科普即可。"
 )
 
 def _ask_llm(
     detect_info: dict,
     system_prompt: str | None = None,
     conf_threshold: float | None = None,
-    avg_confidence: float | None = None,  # 🌟 新增参数：接收平均置信度
+    avg_confidence: float | None = None,  # 依然接收这个参数，但内部不再使用它
 ) -> dict:
     """把 YOLO 的检测字典发给大模型解释，并返回文字和 Token 消耗"""
     if not detect_info:
-        return {"text": "未检测到显著目标，无法确认画面中的生物种类。", "cost": 0.0, "tokens": 0}
+        return {"text": "画面中似乎没有发现明显的水下人造物。", "cost": 0.0, "tokens": 0}
         
     desc = "、".join([f"{count}个 {name}" for name, count in detect_info.items()])
     
-    # 🌟 把置信度拼接到 Prompt 里
-    conf_text = ""
-    if avg_confidence is not None:
-        conf_text = f"（注：该检测结果的平均置信度为 {avg_confidence:.2f}，即模型有 {avg_confidence*100:.1f}% 的把握。）"
-
+    # 2. 用户指令：移除所有关于置信度的字眼，改为纯自然的叙述
     prompt = (
-        f"我上传了一段水下影像，本地 YOLO 视觉模型在其中检测到了以下目标：{desc}。{conf_text}\n"
-        "请严格按照以下结构输出一段专业的分析报告（不要使用 Markdown 格式符号）：\n"
-        "1. 物品推测：根据检测出的类别（可能为英文类别名，请翻译为中文），推断这具体是什么人造物（如塑料袋、塑料瓶、废弃渔网等）。\n"
-        "2. 确定性评估：直接引用我提供的置信度数据，评估本次识别的准确性。\n"
-        "3. 环境危害科普：科普该类人造物在水下环境中的降解难度（如需要几百年），以及它对海洋生物可能造成的危害（如缠绕、误食等）。\n"
-        "4. 治理与处置建议：给出针对此类水下垃圾的打捞、分类处置建议，或对潜水员及公众的环保呼吁。"
+        f"刚刚水下视觉系统扫描了一下，发现了这些东西：{desc}。\n"
+        "请用一段自然、连贯的话（不要分点，不要用生硬的序号），向用户解释一下。\n"
+        "在解释中，请自然地融入以下几点信息：\n"
+        "1. 这些东西具体可能是什么（把英文翻译成中文）；\n"
+        "2. 它们出现在水下，对海洋生态会有什么影响；\n"
+        "3. 给出一些接地气的环保倡议或处置建议。\n"
+        "请像讲故事或讲解纪录片一样，语气要亲切，让非专业人士也能轻松听懂。"
     )
     
-    logger.info(f"正在请求大模型解释，检测数据：{detect_info}，平均置信度：{avg_confidence}")
+    logger.info(f"正在请求大模型解释，检测数据：{detect_info}") # 日志里也不打置信度了
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[
@@ -135,7 +132,7 @@ def estimate_cost(file) -> dict:
             video_path = temp.name
             temp_path = video_path
             
-            # 🚨 极其重要：重置文件指针，防止后续 analyze_video 读不到文件！
+            # 极其重要：重置文件指针，防止后续 analyze_video 读不到文件！
             file.seek(0) 
         else:
             video_path = str(file)
@@ -185,7 +182,7 @@ def analyze_detection(detect_info: dict, conf_threshold: float | None = None, av
         detect_info,
         system_prompt=GUARDRAIL_PROMPT,
         conf_threshold=conf_threshold,
-        avg_confidence=avg_confidence,  # 🌟 透传置信度
+        avg_confidence=avg_confidence,  # 透传置信度
     )
 
 
@@ -209,14 +206,14 @@ def analyze_video(file) -> dict:
         video_name = os.path.basename(video_path)
 
     detect_summary = {}
-    conf_list = [] # 🌟 新增：用来收集每一帧/每一张图的置信度
+    conf_list = [] # 新增：用来收集每一帧/每一张图的置信度
 
-    # 🌟 修改回调函数，提取置信度
+    # 修改回调函数，提取置信度
     def on_complete(result):
         per_class = result.stats.get("per_class", {})
         detect_summary.update(per_class)
         
-        # 从 result.stats 中尝试提取置信度列表（D7 底层通常会存）
+        # 从 result.stats 中尝试提取置信度列表
         # 如果 stats 里没有，尝试从 result.boxes 里直接拿
         if hasattr(result, "boxes") and result.boxes is not None and len(result.boxes) > 0:
             try:
@@ -239,13 +236,13 @@ def analyze_video(file) -> dict:
         if hasattr(file, "read") and os.path.exists(video_path):
             os.remove(video_path)
 
-    # 🌟 计算平均置信度
+    # 计算平均置信度
     avg_conf = None
     if conf_list:
         avg_conf = sum(conf_list) / len(conf_list)
         logger.info(f"提取到 {len(conf_list)} 个检测框，平均置信度：{avg_conf:.4f}")
 
-    # 🌟 把平均置信度传给 _ask_llm
+    # 把平均置信度传给 _ask_llm
     result_dict = _ask_llm(detect_summary, avg_confidence=avg_conf)
     
     if result_dict["tokens"] > 0:
